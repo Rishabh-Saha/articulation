@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) {
+      return request.auth != null && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function text(value, limit) { return value is string && value.size() <= limit; }
+    function rating(value) {
+      // Accessing the required fields also rejects missing keys and non-maps.
+      // Membership keeps the 12-criterion check within Firestore's expression budget.
+      return value.keys().hasOnly(['score', 'notes'])
+        && value.score in [null, 1, 2, 3, 4, 5]
+        && text(value.notes, 20000);
+    }
+    function audio(value) {
+      return value.keys().hasOnly(['rate', 'volume', 'pitch', 'pauses', 'endings', 'clarity', 'fillers'])
+        && rating(value.rate) && rating(value.volume) && rating(value.pitch)
+        && rating(value.pauses) && rating(value.endings) && rating(value.clarity) && rating(value.fillers);
+    }
+    function visual(value) {
+      return value.keys().hasOnly(['posture', 'gestures', 'face', 'nerves', 'presence'])
+        && rating(value.posture) && rating(value.gestures) && rating(value.face)
+        && rating(value.nerves) && rating(value.presence);
+    }
+    function entry(value, dayId) {
+      return value is map && value.keys().hasOnly(['day', 'date', 'topic', 'video', 'self', 'reflection', 'aiReviews', 'externalFeedback', 'legacyAi', 'completed', 'updatedAt'])
+        && value.day is int && value.day >= 1 && value.day <= 42 && string(value.day) == dayId
+        && text(value.date, 10) && (value.date == '' || value.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && text(value.topic, 500)
+        && value.video is map && value.video.keys().hasOnly(['provider', 'url'])
+        && value.video.provider in ['google_photos', 'external']
+        && text(value.video.url, 4096) && (value.video.url == '' || value.video.url.matches('^https://[^@/]+(/.*)?$'))
+        && value.self is map && value.self.keys().hasOnly(['audio', 'visual', 'eyeContact', 'headMovement'])
+        && audio(value.self.audio) && visual(value.self.visual)
+        && text(value.self.eyeContact, 20000) && text(value.self.headMovement, 20000)
+        && value.reflection is map && value.reflection.keys().hasOnly(['strengths', 'improvements', 'tomorrowFocus'])
+        && text(value.reflection.strengths, 20000) && text(value.reflection.improvements, 20000) && text(value.reflection.tomorrowFocus, 20000)
+        && value.aiReviews is list && value.aiReviews.size() <= 100
+        && value.externalFeedback is list && value.externalFeedback.size() <= 200
+        && (!('legacyAi' in value) || (value.legacyAi is map
+          && value.legacyAi.keys().hasOnly(['score', 'notes'])
+          && (value.legacyAi.score == null || (value.legacyAi.score is number && value.legacyAi.score >= 1 && value.legacyAi.score <= 5))
+          && text(value.legacyAi.notes, 20000)))
+        && value.completed is bool && text(value.updatedAt, 40);
+    }
+    function valid(dayId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['entry', 'revision', 'lastMutation', 'updatedAt'])
+        && data.revision is int && data.revision >= 1
+        && text(data.lastMutation, 100) && data.lastMutation.size() > 0
+        && data.updatedAt == request.time && entry(data.entry, dayId);
+    }
+    match /users/{uid}/days/{dayId} {
+      allow read: if owner(uid);
+      allow create: if owner(uid) && request.resource.data.revision == 1 && valid(dayId);
+      allow update: if owner(uid) && request.resource.data.revision == resource.data.revision + 1 && valid(dayId);
+      allow delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

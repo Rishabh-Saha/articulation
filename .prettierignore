@@ -1,0 +1,6 @@
+node_modules
+dist
+test-results
+.cache
+package-lock.json
+*.log
