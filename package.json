@@ -14,6 +14,7 @@
     "test:e2e": "node tests/smoke.mjs",
     "test:cloud": "node tests/cloud-smoke.mjs",
     "test:a11y": "node tests/accessibility.mjs",
+    "test:safety": "node tests/safety-smoke.mjs",
     "setup:emulators": "python3 scripts/setup-emulator.py",
     "emulators": "node scripts/emulators.mjs",
     "dev:cloud-test": "VITE_FIREBASE_API_KEY=demo-key VITE_FIREBASE_AUTH_DOMAIN=demo-articulation.firebaseapp.com VITE_FIREBASE_PROJECT_ID=demo-articulation VITE_FIREBASE_APP_ID=demo-app VITE_FIREBASE_EMULATORS=1 vite --host 127.0.0.1 --port 5174"

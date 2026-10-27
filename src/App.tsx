@@ -19,6 +19,7 @@ import {
   LogOut,
   Menu,
   Mic,
+  NotebookPen,
   Play,
   Plus,
   Settings2,
@@ -43,14 +44,22 @@ import Chart from './Chart'
 import type { Metric } from './Chart'
 import Backup, { downloadJson } from './Backup'
 import Modal from './Modal'
+import Notebook from './Notebook'
 import { AiReviews, Feedback, Reflection, SelfReview } from './Review'
 
-type Page = { view: 'journal' | 'progress' } | { view: 'day'; day: number }
+type Page = { view: 'journal' | 'progress' | 'notes' } | { view: 'day'; day: number }
 function readPage(): Page {
   const day = /^#day\/(\d+)$/.exec(location.hash)?.[1]
   return day && Number(day) >= 1 && Number(day) <= 42
     ? { view: 'day', day: Number(day) }
-    : { view: location.hash === '#progress' ? 'progress' : 'journal' }
+    : {
+        view:
+          location.hash === '#progress'
+            ? 'progress'
+            : location.hash === '#notes'
+              ? 'notes'
+              : 'journal',
+      }
 }
 function Wave({ large = false }: { large?: boolean }) {
   return (
@@ -111,19 +120,23 @@ function App() {
   const conflictDays = Object.keys(journal.conflicts).map(Number)
   const saveLabel = journal.storageError
     ? 'Browser save failed'
-    : !user
-      ? 'Saved on this device'
-      : journal.error || !journal.online
-        ? 'Unsaved / offline'
-        : !journal.ready
-          ? 'Loading cloud journal…'
-          : conflictDays.length
-            ? 'Review sync conflict'
-            : pending
-              ? journal.syncing
-                ? 'Saving…'
-                : 'Waiting to sync…'
-              : 'Saved to cloud'
+    : !journal.canEdit
+      ? 'Read-only tab'
+      : journal.missingCloudDays.length
+        ? 'Cloud copy missing'
+        : !user
+          ? 'Saved on this device'
+          : journal.error || !journal.online
+            ? 'Unsaved / offline'
+            : !journal.ready
+              ? 'Loading cloud journal…'
+              : conflictDays.length
+                ? 'Review sync conflict'
+                : pending
+                  ? journal.syncing
+                    ? 'Saving…'
+                    : 'Waiting to sync…'
+                  : 'Saved to cloud'
   const saveIcon = !user ? (
     <HardDrive size={13} />
   ) : pending || journal.error || !journal.online ? (
@@ -217,7 +230,9 @@ function App() {
         <div className="workspace-label">YOUR WORKSPACE</div>
         <nav aria-label="Main navigation">
           <button
-            className={page.view !== 'progress' ? 'nav-item active' : 'nav-item'}
+            className={
+              page.view === 'journal' || page.view === 'day' ? 'nav-item active' : 'nav-item'
+            }
             onClick={() => navigate({ view: 'journal' })}
           >
             <BookOpen size={18} />
@@ -229,6 +244,13 @@ function App() {
           >
             <ChartNoAxesCombined size={18} />
             Your progress
+          </button>
+          <button
+            className={page.view === 'notes' ? 'nav-item active' : 'nav-item'}
+            onClick={() => navigate({ view: 'notes' })}
+          >
+            <NotebookPen size={18} />
+            Notebook
           </button>
           <button className="nav-item" onClick={() => openBackup()}>
             <ArrowDownToLine size={18} />
@@ -295,7 +317,9 @@ function App() {
                 ? `Day ${String(page.day).padStart(2, '0')}`
                 : page.view === 'progress'
                   ? 'Your progress'
-                  : 'Daily journal'}
+                  : page.view === 'notes'
+                    ? 'Notebook'
+                    : 'Daily journal'}
             </strong>
           </div>
           <div className="topbar-actions">
@@ -325,6 +349,54 @@ function App() {
           </div>
         </header>
         <main id="main-content" className="content" tabIndex={-1}>
+          {!user && (
+            <div className="notice">
+              <HardDrive size={17} />
+              <span>
+                <strong>This journal is currently on this device only.</strong>To use the same
+                entries on other devices, connect cloud sync. Until then, export a backup before
+                clearing browser data.
+              </span>
+              <button className="text-button" onClick={() => openBackup()}>
+                Back up journal
+              </button>
+            </div>
+          )}
+          {!journal.canEdit && (
+            <div className="notice" role="status">
+              <ShieldCheck size={17} />
+              <span>
+                {journal.lockError ||
+                  'This tab is read-only while another tab edits this journal. Close the other journal tab to continue here. Viewing and exports remain available.'}
+              </span>
+            </div>
+          )}
+          {!!journal.missingCloudDays.length && (
+            <div className="conflict-banner" role="alert">
+              <div>
+                <strong>A cloud copy is missing.</strong>
+                <p>
+                  Days {journal.missingCloudDays.join(', ')} were previously saved but are not in
+                  the cloud response. Their local copies are preserved. Export a backup before
+                  restoring them.
+                </p>
+              </div>
+              <div className="button-row">
+                <button className="button small" onClick={() => openBackup()}>
+                  Export a backup
+                </button>
+                <button
+                  className="button small primary"
+                  disabled={!journal.canEdit || !!journal.storageError}
+                  onClick={() =>
+                    journal.missingCloudDays.forEach((day) => store.restoreMissing(day))
+                  }
+                >
+                  Restore local copies to cloud
+                </button>
+              </div>
+            </div>
+          )}
           {(journal.storageError || journal.error || authError) && (
             <div className="error-banner" role="alert">
               <CloudOff size={18} />
@@ -394,11 +466,16 @@ function App() {
                 >
                   Download both
                 </button>
-                <button className="button small" onClick={() => store.resolve(day, 'cloud')}>
+                <button
+                  className="button small"
+                  disabled={!journal.canEdit}
+                  onClick={() => store.resolve(day, 'cloud')}
+                >
                   Use cloud
                 </button>
                 <button
                   className="button small primary"
+                  disabled={!journal.canEdit}
                   onClick={() => store.resolve(day, 'local')}
                 >
                   Keep my draft
@@ -408,7 +485,7 @@ function App() {
           ))}
           <fieldset
             className="workspace-fieldset"
-            disabled={!journal.authReady || !!journal.storageError}
+            disabled={!journal.authReady || !!journal.storageError || !journal.canEdit}
           >
             {page.view === 'journal' && (
               <>
@@ -628,6 +705,14 @@ function App() {
                 </div>
               </>
             )}
+            {page.view === 'notes' && (
+              <Notebook
+                records={records}
+                update={(day, fn) => store.update(day, fn)}
+                openDay={(day) => navigate({ view: 'day', day })}
+                headingRef={heading}
+              />
+            )}
             {page.view === 'progress' && (
               <>
                 <div className="page-heading">
@@ -820,6 +905,7 @@ function App() {
           close={() => setModal(null)}
           initialEntries={guestEntries}
           rawData={rawData}
+          canImport={journal.canEdit && !journal.storageError && journal.authReady}
           apply={(imported) => {
             for (const e of imported) store.update(e.day, () => e)
             notify(

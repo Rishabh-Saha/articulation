@@ -181,6 +181,7 @@ export function Reflection({ entry, update }: { entry: DayEntry; update: Update 
         <span className="subtle">Make it specific.</span>
       </div>
       {[
+        ['notes', 'Notes for today', 'Your thoughts, prompts, and observations…'],
         ['strengths', 'What went well?', 'Keep doing this…'],
         ['improvements', 'What would you change?', 'Next time, I could…'],
         ['tomorrowFocus', 'One focus for tomorrow', 'One small, achievable thing.'],
@@ -191,6 +192,7 @@ export function Reflection({ entry, update }: { entry: DayEntry; update: Update 
             rows={3}
             maxLength={20000}
             placeholder={placeholder}
+            aria-label={label}
             value={entry.reflection[key as keyof DayEntry['reflection']]}
             onChange={(event) =>
               update((e) => ({ ...e, reflection: { ...e.reflection, [key]: event.target.value } }))

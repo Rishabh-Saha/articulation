@@ -34,7 +34,8 @@ service cloud.firestore {
         && value.self is map && value.self.keys().hasOnly(['audio', 'visual', 'eyeContact', 'headMovement'])
         && audio(value.self.audio) && visual(value.self.visual)
         && text(value.self.eyeContact, 20000) && text(value.self.headMovement, 20000)
-        && value.reflection is map && value.reflection.keys().hasOnly(['strengths', 'improvements', 'tomorrowFocus'])
+        && value.reflection is map && value.reflection.keys().hasOnly(['notes', 'strengths', 'improvements', 'tomorrowFocus'])
+        && (!('notes' in value.reflection) || text(value.reflection.notes, 20000))
         && text(value.reflection.strengths, 20000) && text(value.reflection.improvements, 20000) && text(value.reflection.tomorrowFocus, 20000)
         && value.aiReviews is list && value.aiReviews.size() <= 100
         && value.externalFeedback is list && value.externalFeedback.size() <= 200

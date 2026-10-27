@@ -20,12 +20,14 @@ export default function Backup({
   apply,
   initialEntries,
   rawData,
+  canImport = true,
 }: {
   records: Records
   close: () => void
   apply: (entries: DayEntry[]) => void
   initialEntries?: DayEntry[]
   rawData: () => void
+  canImport?: boolean
 }) {
   const [preview, setPreview] = useState<{ entries: DayEntry[]; legacy: boolean } | null>(
     initialEntries ? { entries: initialEntries, legacy: false } : null,
@@ -98,6 +100,12 @@ export default function Backup({
       <p className="modal-intro">
         Your practice is worth keeping. Back up your journal separately from your videos.
       </p>
+      {!canImport && (
+        <p className="notice">
+          Import is paused while this tab is read-only or browser storage needs attention. You can
+          still preview a file and export your existing journal.
+        </p>
+      )}
       <div className="backup-options">
         <div className="backup-option">
           <Download className="accent" size={24} />
@@ -195,7 +203,7 @@ export default function Backup({
           </div>
           <button
             className="button primary"
-            disabled={!included.length}
+            disabled={!included.length || !canImport}
             onClick={() => {
               apply(included)
               close()

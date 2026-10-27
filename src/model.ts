@@ -98,7 +98,12 @@ export const daySchema = z.object({
   topic: z.string().max(500),
   video: z.object({ provider: z.enum(['google_photos', 'external']), url: urlSchema }),
   self: z.object({ audio, visual, eyeContact: text, headMovement: text }),
-  reflection: z.object({ strengths: text, improvements: text, tomorrowFocus: text }),
+  reflection: z.object({
+    notes: text.default(''),
+    strengths: text,
+    improvements: text,
+    tomorrowFocus: text,
+  }),
   aiReviews: z.array(storedAiSchema).max(100),
   externalFeedback: z
     .array(
@@ -232,6 +237,7 @@ export function parseBackup(input: unknown): { entries: DayEntry[]; legacy: bool
     for (const c of audioCriteria) entry.self.audio[c.id].score = value.scores?.[c.id] ?? null
     for (const c of visualCriteria) entry.self.visual[c.id].score = value.scores?.[c.id] ?? null
     entry.reflection = {
+      notes: '',
       strengths: value.strength ?? '',
       improvements: value.improve ?? '',
       tomorrowFocus: value.focus ?? '',

@@ -2,6 +2,8 @@
 
 A personal, 42-day speaking journal. Record a minute, keep the video in Google Photos, and use this app to notice what changes. Built from the supplied handoff and HTML reference with React, TypeScript, Vite, Tailwind CSS, and Firebase.
 
+The [five release requirements and their actual status](docs/acceptance.md) cover data safety, access across devices, free-only operation, automatic AI ratings, and daily notes. Public hosting and live Firebase setup are still pending; automatic AI analysis is not implemented.
+
 ## Run it
 
 Requires Node.js **22.12+** (tested on 24.19), npm, and a modern browser.
@@ -18,6 +20,7 @@ The app works without Firebase in **device-only mode**. No sample scores or base
 
 - Six weeks / 42 daily cards, explicit completion, next incomplete day, desktop and mobile layouts.
 - The exact seven audio and five visual criteria; independent evidence notes, unscored gaze and movement observations, reflections, and timestamped outside feedback.
+- A searchable **Notebook** for all 42 days, with free-form notes and reflections shared with the session view. Old entries and backups default the new notes field to an empty string.
 - HTTPS Google Photos or other external video links, opened in a new tab with no embed or server-side download.
 - Self / AI audio, visual, and combined trends. Unrated days are gaps, not zeroes; combined averages give each assessed criterion equal weight.
 - Optional Google sign-in, Firestore subscription, per-day transactional revisions, debounced cloud writes, durable local pending queue, explicit conflict resolution, and account-isolated local storage.
@@ -46,7 +49,7 @@ The cloud document shape is `{entry: DayEntry, revision, lastMutation, updatedAt
 
 If another browser changes the same day, the app preserves both versions and asks you to download them or choose **Use cloud / Keep my draft**. It does not combine prose automatically. JSON imports similarly offer keep/replace per day. A cloud outage leaves drafts in place and shows an actionable error. Retry sync after resolving connection, rule, or quota errors.
 
-Local data is scoped to `articulation-lab:v2:guest` or `articulation-lab:v2:UID`. Signing out does not erase local account copies: use a trusted device. Unreadable existing storage is preserved and editing is paused; **Export original browser data** downloads it for recovery. Quota failures are surfaced and in-memory entries can still be exported. Offline editing requires an already loaded page; this version is not an installable/offline-first PWA. Use one tab per account while offline; cross-tab local editing is not coordinated. Firestore documents have a 1 MiB limit; very long AI histories may need child collections in a later version.
+Local data is scoped to `articulation-lab:v2:guest` or `articulation-lab:v2:UID`. Signing out does not erase local account copies: use a trusted device. Unreadable existing storage is preserved and editing is paused; **Export original browser data** downloads it for recovery. Quota failures are surfaced and in-memory entries can still be exported. Offline editing requires an already loaded page; this version is not an installable/offline-first PWA. **Web Locks allows only one editing tab per browser/account**; other tabs cannot edit/import and automatically take over after the writer closes, loading the latest draft first. Use a current browser on HTTPS or localhost; unsupported contexts pause editing. A previously confirmed day missing from the cloud is preserved locally and flagged, with an explicit restore action; it is never silently deleted or reported as cloud-saved. Firestore documents have a 1 MiB limit; very long AI histories may need child collections in a later version.
 
 ## Backups and prototype migration
 
@@ -96,6 +99,7 @@ npm audit --omit=dev
 # With npm run dev running, and Chromium installed:
 npm run test:e2e
 npm run test:a11y
+npm run test:safety
 ```
 
 Browser checks default to `/usr/bin/chromium` and port 5173. Override `CHROMIUM_PATH` and `APP_URL` when needed. Screenshots go to ignored `test-results/`. AI data used in tests is explicitly a fixture, never initial user content. A compatible patched `@grpc/grpc-js` override addresses Firebase's older transitive dependency; the production audit was clean at implementation time.

@@ -35,8 +35,13 @@ type Snapshot = {
   storageError: string
   ready: boolean
   syncing: boolean
+  missingCloudDays: number[]
 }
 export const storageKey = (scope: string) => `articulation-lab:v2:${scope}`
+const browserStorage = {
+  getItem: (key: string) => window.localStorage.getItem(key),
+  setItem: (key: string, value: string) => window.localStorage.setItem(key, value),
+}
 
 export class JournalStore {
   private listeners = new Set<() => void>()
@@ -44,20 +49,26 @@ export class JournalStore {
   private state: Snapshot
   constructor(
     readonly scope: string,
-    private storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage,
+    private storage: Pick<Storage, 'getItem' | 'setItem'> = browserStorage,
+    private writable = true,
   ) {
-    this.state = {
+    this.state = this.readDisk()
+  }
+  private readDisk(): Snapshot {
+    const initial: Snapshot = {
       records: {},
       revisions: {},
       pending: {},
       conflicts: {},
       error: '',
       storageError: '',
-      ready: scope === 'guest',
+      ready: this.scope === 'guest',
       syncing: false,
+      missingCloudDays: [],
     }
+    this.blocked = false
     try {
-      const raw = storage.getItem(storageKey(scope))
+      const raw = this.storage.getItem(storageKey(this.scope))
       if (raw) {
         const disk = diskSchema.parse(JSON.parse(raw))
         // A corrupted key must never silently attach a day to another document.
@@ -65,13 +76,20 @@ export class JournalStore {
           if (Number(key) !== entry.day) throw Error('Day mismatch')
         for (const [key, pending] of Object.entries(disk.pending))
           if (Number(key) !== pending.entry.day) throw Error('Draft mismatch')
-        this.state = { ...this.state, ...disk }
+        return { ...initial, ...disk }
       }
     } catch {
       this.blocked = true
-      this.state.storageError =
+      initial.storageError =
         'Existing browser data could not be read. It has been preserved. Export the original browser data before resetting storage; editing is paused.'
     }
+    return initial
+  }
+  setWritable(value: boolean) {
+    this.writable = value
+  }
+  reloadReadOnly() {
+    if (!this.writable) this.publish(this.readDisk())
   }
   getSnapshot = () => this.state
   subscribe = (listener: () => void) => {
@@ -81,7 +99,7 @@ export class JournalStore {
     }
   }
   private publish(next: Snapshot, persist = false) {
-    if (persist && !this.blocked) {
+    if (persist && !this.blocked && this.writable) {
       try {
         this.storage.setItem(
           storageKey(this.scope),
@@ -106,7 +124,7 @@ export class JournalStore {
     this.listeners.forEach((fn) => fn())
   }
   update(day: number, update: (entry: DayEntry) => DayEntry) {
-    if (this.blocked) return
+    if (this.blocked || !this.writable) return
     const entry = daySchema.parse({
       ...update(this.state.records[day] ?? blankDay(day)),
       day,
@@ -144,8 +162,35 @@ export class JournalStore {
         next.revisions[day] = remote.revision
       }
     }
-    // Remote deletions never erase a local copy. Restoring one requires an explicit edit.
+    // Missing cloud records must not be silently erased or labelled as saved.
+    next.missingCloudDays = Object.keys(next.revisions)
+      .map(Number)
+      .filter(
+        (day) =>
+          next.revisions[day] > 0 &&
+          !records[day] &&
+          (!next.pending[day] || next.pending[day].baseRevision > 0),
+      )
     this.publish(next, true)
+  }
+  restoreMissing(day: number) {
+    if (!this.writable || this.blocked || !this.state.missingCloudDays.includes(day)) return
+    this.publish(
+      {
+        ...this.state,
+        pending: {
+          ...this.state.pending,
+          [day]: {
+            entry: this.state.records[day],
+            baseRevision: 0,
+            mutationId: crypto.randomUUID(),
+          },
+        },
+        missingCloudDays: this.state.missingCloudDays.filter((d) => d !== day),
+        error: '',
+      },
+      true,
+    )
   }
   confirm(day: number, sent: Pending, revision: number) {
     const pending = { ...this.state.pending }
@@ -166,6 +211,7 @@ export class JournalStore {
     this.publish({ ...this.state, conflicts: { ...this.state.conflicts, [day]: remote } }, true)
   }
   resolve(day: number, keep: 'local' | 'cloud') {
+    if (!this.writable || this.blocked) return
     const remote = this.state.conflicts[day]
     if (!remote) return
     const conflicts = { ...this.state.conflicts }
@@ -209,8 +255,53 @@ export function useJournal() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(!auth)
   const [online, setOnline] = useState(navigator.onLine)
-  const store = useMemo(() => new JournalStore(user?.uid ?? 'guest'), [user?.uid])
+  const store = useMemo(() => new JournalStore(user?.uid ?? 'guest', undefined, false), [user?.uid])
+  const [lockedStore, setLockedStore] = useState<JournalStore | null>(null)
+  const [lockError, setLockError] = useState('')
+  const canEdit = lockedStore === store
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  useEffect(() => {
+    let active = true
+    let release: (() => void) | undefined
+    const controller = new AbortController()
+    if (!navigator.locks) {
+      setLockError(
+        'This browser cannot safely coordinate journal tabs. Use an up-to-date browser over HTTPS. Editing is paused; exports remain available.',
+      )
+      return
+    }
+    setLockError('')
+    // One editor per browser storage partition. Other tabs can view/export and
+    // automatically take over when the current editor closes. Different devices
+    // continue to use Firestore's transactional conflict handling.
+    void navigator.locks
+      .request(`articulation-editor:${store.scope}`, { signal: controller.signal }, async () => {
+        if (!active) return
+        store.reloadReadOnly()
+        store.setWritable(true)
+        setLockedStore(store)
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      })
+      .catch((error) => {
+        if (active && error?.name !== 'AbortError')
+          setLockError(
+            'The browser could not secure this journal for editing. Close duplicate tabs and reload. You can still export a backup.',
+          )
+      })
+    const refresh = (event: StorageEvent) => {
+      if (event.key === storageKey(store.scope)) store.reloadReadOnly()
+    }
+    window.addEventListener('storage', refresh)
+    return () => {
+      active = false
+      store.setWritable(false)
+      release?.()
+      controller.abort()
+      window.removeEventListener('storage', refresh)
+    }
+  }, [store])
   useEffect(() => {
     if (!auth) return
     return onAuthStateChanged(
@@ -236,7 +327,7 @@ export function useJournal() {
   }, [])
   const [connectionAttempt, setConnectionAttempt] = useState(0)
   useEffect(() => {
-    if (!db || !user) return
+    if (!db || !user || !canEdit) return
     return onSnapshot(
       collection(db, 'users', user.uid, 'days'),
       { includeMetadataChanges: true },
@@ -260,10 +351,18 @@ export function useJournal() {
       },
       (error) => store.status({ ready: false, error: friendlyError(error) }),
     )
-  }, [user, store, connectionAttempt])
+  }, [user, store, connectionAttempt, canEdit])
 
   const flush = useCallback(async () => {
-    if (!db || !user || !online || !store.getSnapshot().ready || store.getSnapshot().syncing) return
+    if (
+      !db ||
+      !user ||
+      !online ||
+      !canEdit ||
+      !store.getSnapshot().ready ||
+      store.getSnapshot().syncing
+    )
+      return
     store.status({ syncing: true })
     try {
       for (const key of Object.keys(store.getSnapshot().pending)) {
@@ -300,7 +399,7 @@ export function useJournal() {
     } finally {
       store.status({ syncing: false })
     }
-  }, [store, user, online])
+  }, [store, user, online, canEdit])
   useEffect(() => {
     if (!Object.keys(snapshot.pending).length || snapshot.error || snapshot.syncing) return
     const timer = window.setTimeout(() => {
@@ -323,6 +422,8 @@ export function useJournal() {
     store,
     user,
     authReady,
+    canEdit,
+    lockError,
     online,
     retry: () => {
       store.status({ error: '' })

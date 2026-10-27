@@ -39,9 +39,18 @@ async function waitValue(page, value) {
 try {
   await signedIn(a)
   await a.getByRole('textbox', { name: 'What’s the topic?' }).fill('Saved in browser A')
+  await a.getByRole('button', { name: 'Reflection', exact: true }).click()
+  await a
+    .getByLabel('Notes for today', { exact: true })
+    .fill('My daily notes travel with my account.')
   await a.getByRole('status').filter({ hasText: 'Saved to cloud' }).waitFor()
   await signedIn(b)
   await waitValue(b, 'Saved in browser A')
+  await b.getByRole('button', { name: 'Reflection', exact: true }).click()
+  assert.equal(
+    await b.getByLabel('Notes for today', { exact: true }).inputValue(),
+    'My daily notes travel with my account.',
+  )
   console.log('PASS a second browser loads the first browser’s confirmed cloud entry')
   await first.setOffline(true)
   await a.getByRole('textbox', { name: 'What’s the topic?' }).fill('My offline draft')
@@ -63,9 +72,37 @@ try {
   await waitValue(a, 'My offline draft')
   await a.getByRole('status').filter({ hasText: 'Saved to cloud' }).waitFor()
   console.log('PASS confirmed account data restores after reload')
+  // Deliberately simulate an administrator deleting a document in the local
+  // demo emulator. This admin shortcut is never used by the application.
+  const uid = await a.evaluate(async () => (await import('/src/firebase.ts')).auth.currentUser.uid)
+  const deletion = await fetch(
+    `http://127.0.0.1:8085/v1/projects/demo-articulation/databases/(default)/documents/users/${encodeURIComponent(uid)}/days/1`,
+    { method: 'DELETE', headers: { Authorization: 'Bearer owner' } },
+  )
+  assert.equal(deletion.ok, true)
+  await a.getByText('A cloud copy is missing.', { exact: true }).waitFor()
+  assert.equal(
+    await a.getByRole('textbox', { name: 'What’s the topic?' }).inputValue(),
+    'My offline draft',
+  )
+  assert.equal(await a.getByRole('status').filter({ hasText: 'Saved to cloud' }).count(), 0)
+  console.log(
+    'PASS an unexpectedly missing cloud entry is preserved locally and never labelled saved',
+  )
+  await a.getByRole('button', { name: 'Restore local copies to cloud', exact: true }).click()
+  await a.getByRole('status').filter({ hasText: 'Saved to cloud' }).waitFor()
+  await b.getByRole('status').filter({ hasText: 'Saved to cloud' }).waitFor()
+  await a.getByRole('button', { name: 'Reflection', exact: true }).click()
+  assert.equal(
+    await a.getByLabel('Notes for today', { exact: true }).inputValue(),
+    'My daily notes travel with my account.',
+  )
+  console.log(
+    'PASS explicit recovery restores the cloud entry and daily notes without losing content',
+  )
   assert.deepEqual(errors, [])
   console.log(
-    '4 cloud browser checks passed against Auth and Firestore emulators. No live account used.',
+    '6 cloud browser checks passed against Auth and Firestore emulators. No live account used.',
   )
 } finally {
   await browser.close()

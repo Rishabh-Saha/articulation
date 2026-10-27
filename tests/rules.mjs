@@ -120,6 +120,7 @@ try {
     for (const group of [e.self.audio, e.self.visual])
       for (const key of Object.keys(group)) group[key] = { score: 5, notes: 'Specific evidence' }
     e.legacyAi = { score: 2.83, notes: 'Imported notes' }
+    e.reflection.notes = 'Notes from the common notebook'
     return assertSucceeds(setDoc(doc(alice, 'users/alice/days/1'), payload(e, 3)))
   })
   await check('the owner cannot accidentally delete a day', () =>

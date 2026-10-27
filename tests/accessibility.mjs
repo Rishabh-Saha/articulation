@@ -41,12 +41,16 @@ try {
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click()
   await page.goto(`${base}/#progress`)
   await check('progress')
+  await page.goto(`${base}/#notes`)
+  await check('desktop notebook')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForTimeout(250)
   await page.goto(`${base}/#journal`)
   await check('mobile journal')
   await page.goto(`${base}/#day/1`)
   await check('mobile review')
+  await page.goto(`${base}/#notes`)
+  await check('mobile notebook')
   console.log(
     `${count} accessibility scans passed. Automated scanning does not replace manual accessibility testing.`,
   )

@@ -87,6 +87,66 @@ describe('durable drafts and cloud conflict handling', () => {
     expect(new JournalStore('alice', disk).getSnapshot().records).toEqual({})
     expect(new JournalStore('bob', disk).getSnapshot().records).toEqual({})
   })
+  it('read-only tabs cannot overwrite, import, or resolve another tab’s draft', () => {
+    const disk = memoryStorage()
+    const editor = new JournalStore('guest', disk)
+    editor.update(1, (e) => ({ ...e, topic: 'First tab draft' }))
+    const viewer = new JournalStore('guest', disk, false)
+    viewer.update(1, (e) => ({ ...e, topic: 'Must not overwrite' }))
+    editor.update(2, (e) => ({ ...e, topic: 'Second day' }))
+    viewer.reloadReadOnly()
+    expect(viewer.getSnapshot().records[1].topic).toBe('First tab draft')
+    expect(viewer.getSnapshot().records[2].topic).toBe('Second day')
+    viewer.setWritable(true)
+    viewer.update(3, (e) => ({ ...e, topic: 'New editor' }))
+    expect(new JournalStore('guest', disk).getSnapshot().records[3].topic).toBe('New editor')
+  })
+  it('preserves a missing cloud record and requires an explicit restore', () => {
+    const store = new JournalStore('alice', memoryStorage())
+    store.remote({
+      1: {
+        entry: { ...blankDay(1), topic: 'Saved earlier' },
+        revision: 3,
+        lastMutation: 'confirmed',
+      },
+    })
+    store.remote({})
+    expect(store.getSnapshot().records[1].topic).toBe('Saved earlier')
+    expect(store.getSnapshot().missingCloudDays).toEqual([1])
+    expect(store.getSnapshot().pending).toEqual({})
+    store.restoreMissing(1)
+    expect(store.getSnapshot().missingCloudDays).toEqual([])
+    expect(store.getSnapshot().pending[1].baseRevision).toBe(0)
+    expect(store.getSnapshot().pending[1].entry.topic).toBe('Saved earlier')
+  })
+  it('does not misidentify pending first saves as deleted cloud data', () => {
+    const store = new JournalStore('alice', memoryStorage())
+    store.update(1, (e) => ({ ...e, topic: 'Never uploaded yet' }))
+    store.remote({})
+    expect(store.getSnapshot().missingCloudDays).toEqual([])
+    expect(store.getSnapshot().pending[1].entry.topic).toBe('Never uploaded yet')
+  })
+  it('can recover an offline draft when its previously saved cloud document disappears', () => {
+    const store = new JournalStore('alice', memoryStorage())
+    store.remote({
+      1: {
+        entry: { ...blankDay(1), topic: 'Cloud version' },
+        revision: 2,
+        lastMutation: 'confirmed',
+      },
+    })
+    store.update(1, (e) => ({
+      ...e,
+      reflection: { ...e.reflection, notes: 'Unsynced offline notes' },
+    }))
+    store.remote({})
+    expect(store.getSnapshot().missingCloudDays).toEqual([1])
+    store.restoreMissing(1)
+    expect(store.getSnapshot().pending[1].baseRevision).toBe(0)
+    expect(store.getSnapshot().pending[1].entry.reflection.notes).toBe('Unsynced offline notes')
+    store.remote({})
+    expect(store.getSnapshot().missingCloudDays).toEqual([])
+  })
   it('never overwrites unreadable browser data and surfaces quota failures', () => {
     const disk = memoryStorage()
     disk.setItem(storageKey('guest'), 'corrupted but recoverable')

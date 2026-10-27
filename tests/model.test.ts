@@ -59,6 +59,20 @@ describe('rubric and averages', () => {
   })
 })
 describe('backups and prototype migration', () => {
+  it('keeps notes-only days and accepts old v2 backups without the new notes field', () => {
+    const entry = blankDay(8)
+    entry.reflection.notes = 'A thought worth keeping'
+    expect(hasContent(entry)).toBe(true)
+    expect(parseBackup(createExport({ 8: entry })).entries[0].reflection.notes).toBe(
+      'A thought worth keeping',
+    )
+    const oldBackup = JSON.parse(
+      JSON.stringify(createExport({ 8: { ...entry, topic: 'Old format' } })),
+    )
+    for (const day of oldBackup.entries) delete day.reflection.notes
+    expect(parseBackup(oldBackup).entries[0].reflection.notes).toBe('')
+    expect(parseBackup(oldBackup).entries[0].topic).toBe('Old format')
+  })
   it('round-trips all text and linked-video metadata through a 42-day backup', () => {
     const day = blankDay(3)
     day.topic = 'Learning to pause'
