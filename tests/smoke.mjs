@@ -91,9 +91,31 @@ try {
     await visible(page.getByText('Your ending felt clear and deliberate.', { exact: true }))
   })
   await page.getByRole('button', { name: 'AI review', exact: true }).click()
+  await check(
+    'in-app analysis requires a local file, consent, and sign-in without changing the journal',
+    async () => {
+      const analyze = page.getByRole('button', { name: 'Analyze video', exact: true })
+      assert.equal(await analyze.isDisabled(), true)
+      await page.getByLabel('Original video', { exact: true }).setInputFiles({
+        name: 'day-1.mp4',
+        mimeType: 'video/mp4',
+        buffer: Buffer.from([0, 0, 0, 12, 102, 116, 121, 112, 105, 115, 111, 109]),
+      })
+      assert.equal(await analyze.isDisabled(), true)
+      await page.getByRole('checkbox', { name: 'I want to send this day’s video' }).check()
+      await analyze.click()
+      await visible(page.getByRole('alert'))
+      assert.match(await page.getByRole('alert').innerText(), /sign in/)
+      assert.equal(
+        await page.getByLabel('What’s the topic?').inputValue(),
+        'The value of a deliberate pause',
+      )
+      await page.getByLabel('Original video', { exact: true }).setInputFiles([])
+    },
+  )
   await page.getByRole('button', { name: 'Import AI review', exact: true }).click()
   await page.getByLabel('AI response (JSON)').fill('{}')
-  await page.getByRole('checkbox').check()
+  await page.getByRole('checkbox', { name: 'I supplied this day’s actual video' }).check()
   await page.getByRole('button', { name: 'Validate review', exact: true }).click()
   await check('invalid AI output is rejected without an overwrite', async () => {
     await visible(page.getByRole('alert'))
@@ -156,13 +178,11 @@ try {
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await page.getByRole('button', { name: 'Backups & import', exact: true }).click()
-  await page
-    .getByLabel('Import backup file')
-    .setInputFiles({
-      name: 'backup.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(exported)),
-    })
+  await page.getByLabel('Import backup file').setInputFiles({
+    name: 'backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(exported)),
+  })
   await page.getByRole('button', { name: 'Import 1 day', exact: true }).click()
   await check('export → clear browser storage → import restores the journal', async () => {
     assert.equal(
@@ -183,13 +203,11 @@ try {
       3: { topic: 'Legacy day', scores: { rate: 2 }, aiScore: '2.4', aiNotes: 'Original notes' },
     },
   }
-  await page
-    .getByLabel('Import backup file')
-    .setInputFiles({
-      name: 'legacy.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(legacy)),
-    })
+  await page.getByLabel('Import backup file').setInputFiles({
+    name: 'legacy.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(legacy)),
+  })
   await check('legacy import preview keeps existing days by default', async () => {
     assert.match(await page.locator('.import-list').innerText(), /Keep existing/)
     assert.equal(

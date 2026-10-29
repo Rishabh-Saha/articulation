@@ -18,5 +18,5 @@
     "noUnusedParameters": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "tests/**/*.test.ts", "vite.config.ts"]
+  "include": ["src", "server/**/*.ts", "functions/**/*.ts", "tests/**/*.test.ts", "vite.config.ts"]
 }

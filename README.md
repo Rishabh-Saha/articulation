@@ -2,7 +2,7 @@
 
 A personal, 42-day speaking journal. Record a minute, keep the video in Google Photos, and use this app to notice what changes. Built from the supplied handoff and HTML reference with React, TypeScript, Vite, Tailwind CSS, and Firebase.
 
-The [five release requirements and their actual status](docs/acceptance.md) cover data safety, access across devices, free-only operation, automatic AI ratings, and daily notes. Public hosting and live Firebase setup are still pending; automatic AI analysis is not implemented.
+The [five release requirements and their actual status](docs/acceptance.md) cover data safety, access across devices, free-only operation, automatic AI ratings, and daily notes. Public hosting and live Firebase setup are still pending; automatic AI analysis has an inactive implementation that still needs live free-tier and real-media verification (see [activation guide](docs/automatic-analysis.md)).
 
 ## Run it
 
@@ -26,7 +26,7 @@ The app works without Firebase in **device-only mode**. No sample scores or base
 - Optional Google sign-in, Firestore subscription, per-day transactional revisions, debounced cloud writes, durable local pending queue, explicit conflict resolution, and account-isolated local storage.
 - Versioned JSON export of all 42 entries; validated, previewed import with **keep existing** as the default. Per-day replacement requires an explicit selection.
 - Migration of the actual supplied HTML's `{version:1, records:{...}}` export. Legacy AI notes and the single legacy score are preserved separately, excluded from structured AI trends.
-- Manual AI Studio prompt / structured JSON import, validated with Zod, with provenance and full review history. No automatic AI calls or video uploads.
+- Manual AI Studio prompt / structured JSON import, validated with Zod, with provenance and full review history. The optional in-app MP4 analysis implementation uses a disabled-by-default authenticated Worker/Pages backend; manual review remains available.
 - Firestore owner-only rules, build-time security headers for Cloudflare Pages, and no secret credentials in the browser.
 
 ## Connect a real cloud journal
@@ -62,17 +62,23 @@ Local data is scoped to `articulation-lab:v2:guest` or `articulation-lab:v2:UID`
 
 Backups include scores, evidence, dates, comments, video URLs, and model/prompt metadata. They contain **no videos**. Keep exports privately: a Google Photos share URL can expose its video to anyone who has the link. Independent exports complement Firestore; provider-managed backups are not assumed to be free.
 
-## AI review: deliberate manual fallback
+## AI review: in-app implementation and manual fallback
 
-The app does **not** upload media, call Gemini, or claim automatic video analysis works. There is no Worker endpoint or API key to configure in this version. A secure, free-only automatic upload path has not been implemented or tested with a real 60-second MP4.
+The AI review tab supports local MP4 selection, consent, upload/analysis states, and saving validated feedback as a new version through a same-origin Worker/Pages backend. It remains **disabled by default and not live-verified**. Read the [automatic analysis activation guide](docs/automatic-analysis.md) for server-only bindings, free-only requirements, D1 caps, temporary-file cleanup, and required real-video testing. Static Vite hosting alone does not run this backend. No Gemini secret belongs in a frontend variable.
 
 Use the **AI review** tab to copy the exact rubric prompt. In Google AI Studio, independently verify a video-capable model currently has a free tier and choose it explicitly. Read the privacy terms before attaching your local file. Free-tier Gemini content may be used to improve provider products. This external upload is your action; the app receives only the JSON you deliberately import.
 
 The importer requires all 12 criteria, nullable integer 1–5 scores, evidence, suggestions, model, prompt version, filename, analysis date, strengths, improvements, exercise, and limitations. Unknown modalities remain **Not assessed**. User confirmation that the actual video was supplied is required. Averages are recomputed; model-supplied averages are ignored. Each import adds a version; it never replaces self-ratings or old AI reviews. Model filler counts and timestamps are estimates, not verified facts.
 
-Before adding automatic analysis, separately verify current official pricing/model availability and prove a streaming/resumable upload path with real media. The backend must verify Firebase JWT signatures and claims, restrict to a single allowed UID, enforce MIME/size/rate/daily caps, restrict CORS to the deployed origin, retain no permanent video, and keep the API key in a Worker secret. Do not expose a key or use an insecure stub to bypass those prerequisites.
+Before activating automatic analysis, separately verify current official pricing/model availability and prove a streaming/resumable upload path with real media. The backend must verify Firebase JWT signatures and claims, restrict to a single allowed UID, enforce MIME/size/rate/daily caps, restrict CORS to the deployed origin, retain no permanent video, and keep the API key in a Worker secret. Do not expose a key or use an insecure stub to bypass those prerequisites.
 
-## Deploy the static app
+## Keep the existing Cloudflare Worker
+
+The current deployment uses **Workers**, with the `articulation.rsaha130.workers.dev` address. Keep that existing Worker. `wrangler.jsonc` now includes the executable `server/worker.ts` backend and static `dist` assets. The build command is `npm run build` and the deploy command is `npx wrangler deploy`. Preserve the existing Firebase build variables. After this code is deployed, the Worker can accept the `AI_LIMITS` D1 binding; an asset-only Worker cannot. The [activation guide](docs/automatic-analysis.md#existing-cloudflare-worker-keep-this-deployment) covers the exact order and free-only account settings. No site-address or journal-data migration is needed.
+
+Use `npm run build:worker` for a local build/dry run without deployment, `npm run dev:worker` for the local Workers runtime, and `npm run test:worker` for routing checks. The original `npm run dev` remains the frontend-only Vite workflow.
+
+## Optional: deploy a static Pages app
 
 No deployment was performed during implementation. Cloudflare account access and live Firebase configuration remain external setup steps.
 

@@ -11,3 +11,6 @@ firebase-debug.log
 firestore-debug.log
 .firebase/
 .cache/
+.wrangler/
+.dev.vars
+.dev.vars.*

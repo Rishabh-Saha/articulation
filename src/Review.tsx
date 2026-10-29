@@ -17,6 +17,7 @@ import type { AudioKey, VisualKey, Criterion } from './rubric'
 import { aiPrompt, formatScore, parseAiReview, scores } from './model'
 import type { AiReview, DayEntry } from './model'
 import Modal from './Modal'
+import AutomaticReview from './AutomaticReview'
 
 type Update = (update: (entry: DayEntry) => DayEntry) => void
 function CriterionRow({
@@ -235,6 +236,7 @@ export function AiReviews({
   }
   return (
     <>
+      <AutomaticReview key={entry.day} entry={entry} update={update} />
       <div className="panel ai-intro">
         <div className="feature-icon">
           <Sparkles size={22} />
@@ -285,8 +287,8 @@ export function AiReviews({
           </button>
         </div>
         <p className="fine-print">
-          Automatic Analyze is not connected. This app sends no videos or API requests to Gemini.
-          Never put an AI API key in this app. Coaching estimates are not objective measurements.
+          Manual review works even when automatic analysis is unavailable. Never put an AI API key
+          in this app. Coaching estimates are not objective measurements.
         </p>
       </div>
       {entry.legacyAi && (

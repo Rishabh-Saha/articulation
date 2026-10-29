@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "articulation",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-10-01",
+  // Preserve variables already entered in the Cloudflare dashboard.
+  // Secrets such as GEMINI_API_KEY stay in Cloudflare, never in this file.
+  "keep_vars": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api", "/api/*"],
+  },
+  // After the first code deployment, add the AI_LIMITS D1 binding in Cloudflare.
+  // Before later code deployments, record that database's real ID here under
+  // d1_databases so Wrangler preserves the binding. See docs/automatic-analysis.md.
+}
