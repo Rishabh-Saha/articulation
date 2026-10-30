@@ -91,6 +91,43 @@ try {
     await visible(page.getByText('Your ending felt clear and deliberate.', { exact: true }))
   })
   await page.getByRole('button', { name: 'AI review', exact: true }).click()
+  await check('saved Google Photos link can be selected without a local upload', async () => {
+    assert.equal(
+      await page
+        .getByRole('button', { name: 'Use Google Photos link', exact: true })
+        .getAttribute('aria-pressed'),
+      'true',
+    )
+    assert.equal(await page.getByLabel('Original video', { exact: true }).count(), 0)
+    await page.getByRole('checkbox', { name: 'I want to send this day’s video' }).check()
+    const analyze = page.getByRole('button', { name: 'Analyze video', exact: true })
+    assert.equal(await analyze.isEnabled(), true)
+    await analyze.click()
+    await visible(page.getByRole('alert'))
+    assert.match(await page.getByRole('alert').innerText(), /sign in/)
+  })
+  await page.getByRole('button', { name: 'Use local file instead', exact: true }).click()
+  await check(
+    'invalid video selection reports the format before upload and keeps journal edits',
+    async () => {
+      await page.getByLabel('Original video', { exact: true }).setInputFiles({
+        name: 'day-1.mov',
+        mimeType: 'video/quicktime',
+        buffer: Buffer.from('video selection fixture'),
+      })
+      await page.getByRole('alert').waitFor()
+      assert.match(await page.getByRole('alert').innerText(), /\.MOV file.*Export an MP4 copy/)
+      assert.equal(
+        await page.getByRole('button', { name: 'Analyze video', exact: true }).isDisabled(),
+        true,
+      )
+      assert.equal(
+        await page.getByLabel('What’s the topic?').inputValue(),
+        'The value of a deliberate pause',
+      )
+      await page.getByLabel('Original video', { exact: true }).setInputFiles([])
+    },
+  )
   await check(
     'in-app analysis requires a local file, consent, and sign-in without changing the journal',
     async () => {

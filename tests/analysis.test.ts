@@ -201,6 +201,42 @@ describe('authenticated free-only video endpoint', () => {
     expect((await analyze(await request(), env, () => {})).status).toBe(502)
     expect(fetch.mock.calls.some(([url]) => String(url).includes('/upload/'))).toBe(false)
   })
+  it('retrieves a shared Photos video through the authenticated capped pipeline', async () => {
+    const provider = providerMock()
+    const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      if (url === 'https://photos.app.goo.gl/fixture')
+        return new Response(null, {
+          status: 302,
+          headers: { Location: 'https://photos.google.com/share/fixture?key=fixture' },
+        })
+      if (url.startsWith('https://photos.google.com/share/'))
+        return new Response(
+          `<script>AF_initDataCallback({key:'ds:1',data:[null,[["AF1Qvideo",["https://lh3.googleusercontent.com/fixture",1920,1080],1,null,null,1]]],sideChannel:{}});</script>`,
+          { headers: { 'Content-Type': 'text/html' } },
+        )
+      if (url === 'https://lh3.googleusercontent.com/fixture=dv') {
+        expect(init?.headers).toEqual({ Accept: 'video/mp4' })
+        return new Response(mp4(), {
+          headers: { 'Content-Type': 'video/mp4', 'Content-Length': '12' },
+        })
+      }
+      return provider(input, init)
+    })
+    vi.stubGlobal('fetch', fetch)
+    const initial = await request()
+    const linkedHeaders = new Headers(initial.headers)
+    linkedHeaders.set('Content-Type', 'application/json')
+    const linked = new Request(initial.url, {
+      method: 'POST',
+      headers: linkedHeaders,
+      body: JSON.stringify({ photosUrl: 'https://photos.app.goo.gl/fixture' }),
+    })
+    const response = await analyze(linked, environment(), () => {})
+    expect(response.status).toBe(200)
+    expect((await response.json()).review.fileMetadata.name).toBe('Google Photos video.mp4')
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true)
+  })
   it('uses actual atomic SQLite quotas to block a second immediate request', async () => {
     const fetch = providerMock()
     vi.stubGlobal('fetch', fetch)

@@ -1,4 +1,6 @@
 import { aiPrompt, parseAiReview } from '../src/model'
+import { PhotosError, readPhotosRequest, resolvePhotosVideo } from './photos'
+import type { VideoSource } from './photos'
 
 // Structural Cloudflare D1 types keep this module testable without a provider SDK.
 export interface AnalysisEnv {
@@ -130,13 +132,20 @@ export async function analyze(
     await verifyUser(bearer, env)
     if (request.headers.get('X-Video-Consent') !== 'yes')
       throw new ApiError(400, 'Video sharing consent is required.')
-    if (request.headers.get('Content-Type') !== 'video/mp4')
-      throw new ApiError(415, 'Choose an MP4 video.')
-    const length = Number(request.headers.get('X-Video-Size'))
-    if (!Number.isSafeInteger(length) || length < 12 || length > MAX_VIDEO_BYTES || !request.body)
-      throw new ApiError(413, 'Choose an MP4 up to 20 MiB.')
-    const filename = decodeURIComponent(request.headers.get('X-Video-Name') ?? '')
-    if (!filename || filename.length > 500) throw new ApiError(400, 'Invalid video filename.')
+    let source: VideoSource | undefined
+    let photosUrl: string | undefined
+    if (request.headers.get('Content-Type') === 'application/json') {
+      photosUrl = await readPhotosRequest(request)
+    } else {
+      if (request.headers.get('Content-Type') !== 'video/mp4')
+        throw new ApiError(415, 'Choose an MP4 video.')
+      const length = Number(request.headers.get('X-Video-Size'))
+      if (!Number.isSafeInteger(length) || length < 12 || length > MAX_VIDEO_BYTES || !request.body)
+        throw new ApiError(413, 'Choose an MP4 up to 20 MiB.')
+      const filename = decodeURIComponent(request.headers.get('X-Video-Name') ?? '')
+      if (!filename || filename.length > 500) throw new ApiError(400, 'Invalid video filename.')
+      source = { body: request.body, length, filename }
+    }
     // One atomic SQLite statement: concurrent requests cannot evade the 3/day, 1/minute cap.
     // Failed/cancelled attempts count too; never retry a provider call automatically.
     const now = Date.now()
@@ -156,6 +165,8 @@ export async function analyze(
         429,
         'Analysis limit reached (one per minute, three per UTC day). Use manual review or try later.',
       )
+    if (photosUrl) source = await resolvePhotosVideo(photosUrl, MAX_VIDEO_BYTES)
+    const { body, length, filename } = source!
     const headers = { 'x-goog-api-key': env.GEMINI_API_KEY! }
     let remoteName: string | undefined
     const cleanup = async () => {
@@ -189,7 +200,7 @@ export async function analyze(
       let received = 0
       const prefix = new Uint8Array(12)
       let prefixLength = 0
-      const stream = request.body.pipeThrough(
+      const stream = body.pipeThrough(
         new TransformStream<Uint8Array, Uint8Array>({
           transform(chunk, controller) {
             received += chunk.byteLength
@@ -295,11 +306,11 @@ export async function analyze(
     return json(
       {
         error:
-          error instanceof ApiError
+          error instanceof ApiError || error instanceof PhotosError
             ? error.message
             : 'Analysis failed. Nothing was saved. Use manual review or retry later.',
       },
-      error instanceof ApiError ? error.status : 502,
+      error instanceof ApiError || error instanceof PhotosError ? error.status : 502,
     )
   }
 }

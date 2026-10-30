@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { analyzeVideo } from '../src/automaticAnalysis'
+import {
+  analyzeVideo,
+  analyzePhotosVideo,
+  isPhotosLink,
+  MAX_VIDEO_BYTES,
+  validateVideo,
+} from '../src/automaticAnalysis'
 import { aiPrompt } from '../src/model'
 
 class FakeRequest {
@@ -47,6 +53,37 @@ afterEach(() => {
   vi.unstubAllGlobals()
   FakeRequest.current = undefined as unknown as FakeRequest
 })
+describe('video selection errors', () => {
+  it.each(['', 'application/octet-stream'])(
+    'accepts a real MP4 when the file picker reports %j as its type',
+    async (type) => {
+      await expect(validateVideo(new File([file()], 'day.MP4', { type }))).resolves.toBeUndefined()
+    },
+  )
+  it('still checks the container when the MP4 type is missing', async () => {
+    await expect(validateVideo(new File(['not a real video'], 'day.mp4'))).rejects.toThrow(
+      'does not contain a readable MP4',
+    )
+  })
+  it('explains the size problem separately from file format', async () => {
+    const oversized = file()
+    Object.defineProperty(oversized, 'size', { value: MAX_VIDEO_BYTES * 2 })
+    await expect(validateVideo(oversized)).rejects.toThrow('40.0 MB; the upload limit is 20 MB')
+  })
+  it('explains how to handle MOV and empty files', async () => {
+    await expect(
+      validateVideo(new File([file()], 'day.mov', { type: 'video/quicktime' })),
+    ).rejects.toThrow('This is a .MOV file. Export an MP4 copy')
+    await expect(validateVideo(new File([], 'day.mp4', { type: 'video/mp4' }))).rejects.toThrow(
+      'This file is empty',
+    )
+  })
+  it('does not treat an unknown file without an MP4 extension as an MP4', async () => {
+    await expect(validateVideo(new File([file()], 'unknown.bin'))).rejects.toThrow(
+      'Export an MP4 copy',
+    )
+  })
+})
 describe('in-app analysis transport', () => {
   it('sends only the selected video to the same origin and reports upload/analysis states', async () => {
     const { result, onPhase, xhr } = await start()
@@ -92,5 +129,75 @@ describe('in-app analysis transport', () => {
       analyzeVideo({ file: file(), token: 'token', signal: controller.signal, onPhase: vi.fn() }),
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(FakeRequest.current).toBeUndefined()
+  })
+})
+
+describe('Google Photos analysis transport', () => {
+  it('uses the saved share link with explicit consent, without a local file', async () => {
+    const review = JSON.parse(aiPrompt().split('JSON structure:\n')[1])
+    review.fileMetadata.name = 'Google Photos video.mp4'
+    const fetch = vi.fn(async () => Response.json({ review }))
+    vi.stubGlobal('fetch', fetch)
+    const onPhase = vi.fn()
+    const photosUrl = 'https://photos.app.goo.gl/fixture'
+    const result = await analyzePhotosVideo({
+      photosUrl,
+      token: 'firebase-token',
+      signal: new AbortController().signal,
+      onPhase,
+    })
+    expect(result.fileMetadata.name).toBe('Google Photos video.mp4')
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/analyze',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ photosUrl }),
+        headers: {
+          Authorization: 'Bearer firebase-token',
+          'Content-Type': 'application/json',
+          'X-Video-Consent': 'yes',
+        },
+      }),
+    )
+    expect(onPhase).toHaveBeenCalledWith('retrieving')
+  })
+  it('shows unavailable video errors and never treats the page as a review', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json(
+          { error: 'Google Photos did not expose this video for download.' },
+          { status: 422 },
+        ),
+      ),
+    )
+    await expect(
+      analyzePhotosVideo({
+        photosUrl: 'https://photos.app.goo.gl/fixture',
+        token: 'token',
+        signal: new AbortController().signal,
+        onPhase: vi.fn(),
+      }),
+    ).rejects.toThrow('did not expose')
+  })
+  it('rejects non-Photos and private-library URLs before calling the backend', async () => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    for (const url of [
+      'https://evil.example/video',
+      'https://photos.google.com/u/0/',
+      'https://photos.google.com.evil.example/share/test',
+    ]) {
+      expect(isPhotosLink(url)).toBe(false)
+      await expect(
+        analyzePhotosVideo({
+          photosUrl: url,
+          token: 'token',
+          signal: new AbortController().signal,
+          onPhase: vi.fn(),
+        }),
+      ).rejects.toThrow()
+    }
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

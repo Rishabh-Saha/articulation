@@ -21,7 +21,7 @@ The app works without Firebase in **device-only mode**. No sample scores or base
 - Six weeks / 42 daily cards, explicit completion, next incomplete day, desktop and mobile layouts.
 - The exact seven audio and five visual criteria; independent evidence notes, unscored gaze and movement observations, reflections, and timestamped outside feedback.
 - A searchable **Notebook** for all 42 days, with free-form notes and reflections shared with the session view. Old entries and backups default the new notes field to an empty string.
-- HTTPS Google Photos or other external video links, opened in a new tab with no embed or server-side download.
+- HTTPS Google Photos or other external video links, opened in a new tab. With explicit AI consent, the backend can attempt to retrieve an individual shared Photos video for review; other links are viewing references only.
 - Self / AI audio, visual, and combined trends. Unrated days are gaps, not zeroes; combined averages give each assessed criterion equal weight.
 - Optional Google sign-in, Firestore subscription, per-day transactional revisions, debounced cloud writes, durable local pending queue, explicit conflict resolution, and account-isolated local storage.
 - Versioned JSON export of all 42 entries; validated, previewed import with **keep existing** as the default. Per-day replacement requires an explicit selection.
@@ -64,7 +64,7 @@ Backups include scores, evidence, dates, comments, video URLs, and model/prompt 
 
 ## AI review: in-app implementation and manual fallback
 
-The AI review tab supports local MP4 selection, consent, upload/analysis states, and saving validated feedback as a new version through a same-origin Worker/Pages backend. It remains **disabled by default and not live-verified**. Read the [automatic analysis activation guide](docs/automatic-analysis.md) for server-only bindings, free-only requirements, D1 caps, temporary-file cleanup, and required real-video testing. Static Vite hosting alone does not run this backend. No Gemini secret belongs in a frontend variable.
+The AI review tab defaults to the saved Google Photos share link. After explicit consent, the backend attempts to retrieve the individual public video and run the existing analysis pipeline. Local MP4 selection remains an alternative; validated feedback is saved as a new version. It remains **disabled by default and not live-verified**. Shared-page retrieval is best effort because Google Photos does not offer an official share-link download API; private links, changed page formats, multi-item albums, non-video responses, and videos over 20 MB produce explicit errors, never invented scores. Read the [automatic analysis activation guide](docs/automatic-analysis.md) for server-only bindings, free-only requirements, D1 caps, temporary-file cleanup, and required real-video testing. Static Vite hosting alone does not run this backend. No Gemini secret belongs in a frontend variable.
 
 Use the **AI review** tab to copy the exact rubric prompt. In Google AI Studio, independently verify a video-capable model currently has a free tier and choose it explicitly. Read the privacy terms before attaching your local file. Free-tier Gemini content may be used to improve provider products. This external upload is your action; the app receives only the JSON you deliberately import.
 

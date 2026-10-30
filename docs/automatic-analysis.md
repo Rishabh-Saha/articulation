@@ -1,8 +1,8 @@
 # Automatic analysis: implementation and activation
 
-The AI review tab now accepts an original MP4 (12 bytes–20 MiB), asks for deliberate sharing consent, and sends it to the same-origin `/api/analyze` backend (Worker or Pages Function). A Google Photos link remains only a viewing link. The UI shows queued, uploading, analyzing, complete, and retry states, offers cancellation, validates returned feedback, and lets the user save a new review version. The upload state describes browser-to-backend transfer; analyzing includes backend-to-provider upload and processing. No video is added to browser storage, backups, Firestore, or D1. Changing day or leaving the AI tab cancels the browser request and discards an unsaved result; a server request may still finish and consume an attempt.
+The AI review tab now defaults to this day’s saved Google Photos share link. After deliberate consent and Analyze, it sends the link to the same-origin `/api/analyze` backend. The backend attempts to retrieve the selected public video and uses the same capped Gemini analysis pipeline as a local MP4 upload. Local MP4 files (12 bytes–20 MiB) remain an optional fallback. The UI shows queued, uploading, analyzing, complete, and retry states, offers cancellation, validates returned feedback, and lets the user save a new review version. For Photos, the combined retrieval/review state includes backend download, provider upload, and analysis. Local-file upload describes browser-to-backend transfer; analyzing includes backend-to-provider upload and processing. No video is added to browser storage, backups, Firestore, or D1. Changing day or leaving the AI tab cancels the browser request and discards an unsaved result; a server request may still finish and consume an attempt.
 
-**Not activated or live-verified.** This change is implementation progress, not proof of real video analysis or a public deployment. Pricing documentation was inaccessible from the development environment (HTTP 403). No provider key, live Firebase account, Cloudflare binding, or real ~60-second MP4 was available. Keep `AI_ENABLED` unset until the live checks below succeed in a controlled test deployment. There is no default model or paid fallback.
+**Not activated or live-verified.** This change is implementation progress, not proof of real video analysis or a public deployment. Pricing documentation was inaccessible from the development environment (HTTP 403). A real Photos link was supplied, but the user elected to test it live rather than grant workspace network access. Automated retrieval tests use synthetic shared-page and MP4 fixtures; they do not establish compatibility with the current live Photos page. No provider key is available in this workspace. Keep `AI_ENABLED` unset until the live checks below succeed in a controlled test deployment. There is no default model or paid fallback.
 
 ## Free-only prerequisites
 
@@ -37,19 +37,7 @@ CREATE TABLE IF NOT EXISTS analysis_limits (
 
 In the existing Worker's **Settings → Bindings**, add a D1 database binding named **`AI_LIMITS`** and select that database. These are only quota counters, never journal records. Leave Firebase/Firestore and all existing journal data alone.
 
-After the binding is added, record its actual database ID in `wrangler.jsonc` before any later code deployment:
-
-```jsonc
-"d1_databases": [
-  {
-    "binding": "AI_LIMITS",
-    "database_name": "articulation-ai-limits",
-    "database_id": "COPY_THE_ACTUAL_D1_DATABASE_ID"
-  }
-]
-```
-
-The database ID is a non-secret public identifier. The checked-in initial config intentionally has no invented ID so it can deploy the executable Worker before a binding exists. `keep_vars` preserves dashboard variables, **not resource bindings**; later Wrangler deployments must declare this binding to preserve it.
+The deployment config now uses Cloudflare’s upload metadata `keep_bindings` for D1, dashboard variables, and secrets, so code updates retain an existing quota binding without inventing a database ID. This metadata passthrough is supported by the pinned Wrangler version. No database is created, reset, or migrated by a code deployment. Local development has no D1 binding unless configured separately. You may still declare the actual binding under `d1_databases` for local database tooling when its non-secret database ID is available.
 
 ### Server settings (after the Worker is deployed)
 
@@ -81,7 +69,15 @@ In another terminal, run `npm run test:worker`. This verifies the static app and
 
 The backend verifies RS256 Firebase JWT signatures using Google's Secure Token JWK endpoint and checks issuer, audience, expiry, issue/auth times, the exact UID, and Google sign-in provider. It rejects missing consent, invalid MIME and size, foreign origins, and non-MP4 signatures. It never fetches user-provided URLs. The byte stream must match the declared size. Quotas use one atomic D1 statement, allowing at most **one attempt per minute and three per UTC day** for the whole deployment, including failed/cancelled attempts. Do not share a Gemini key with other callers and assume this counter controls them.
 
-The backend begins a Gemini resumable upload, streams without buffering the full video, waits for the provider's file to become active, requests the shared 12-criterion rubric, validates the structured response, and supplies trusted model/time/filename provenance. It deletes the provider file before returning success. On failure it attempts deletion through `waitUntil`; if finalization succeeded but its response was lost, or deletion is unavailable, Gemini's documented temporary Files expiry is the fallback (currently 48 hours; verify current terms). Do not promise immediate deletion on every failure. Failed cleanup never returns a successful analysis. No automatic retry or permanent video storage is used.
+### Google Photos retrieval boundaries
+
+Only HTTPS `photos.app.goo.gl/<id>` and `photos.google.com/share/<id>` URLs (including an individual `/photo/<id>` path) are accepted. Every redirect is checked; redirects to sign-in, arbitrary hosts, ports, credentials, and private-library routes are rejected. No Firebase/Gemini tokens or browser cookies are forwarded to Google Photos. Backend retrieval happens only after Firebase authorization, video-sharing consent, and the atomic rate/daily cap.
+
+The resolver reads bounded shared-page JSON data without executing scripts. It requires the selected media ID or exactly one item in the page; it never picks an arbitrary item from an album. It attempts the Google media URL’s `=dv` transformation and requires an actual `video/mp4` response, a valid MP4 signature in the upload stream, and at most 20 MiB. Thumbnails and HTML can never be submitted as video evidence. Redirected media remains restricted to known Google media hosts. The shared-page format is unofficial and can change; a retrieval error is a real failure, not a completed analysis. Photos files usually stream directly; if Google omits their byte length, a bounded in-memory buffer (up to the same 20 MiB) supplies the length needed for Gemini's resumable upload. No permanent video storage is used.
+
+Changing the selected source or saved Photos URL resets consent and discards pending link results. New reviews append to existing history. Notes, self-ratings, old reviews, and journal schemas are unchanged. Live-test both a shared single-video link and an inaccessible or multi-item link; a passed fixture suite is not proof that a real link works.
+
+The backend begins a Gemini resumable upload, streams the video to Gemini, waits for the provider's file to become active, requests the shared 12-criterion rubric, validates the structured response, and supplies trusted model/time/filename provenance. It deletes the provider file before returning success. On failure it attempts deletion through `waitUntil`; if finalization succeeded but its response was lost, or deletion is unavailable, Gemini's documented temporary Files expiry is the fallback (currently 48 hours; verify current terms). Do not promise immediate deletion on every failure. Failed cleanup never returns a successful analysis. No automatic retry or permanent video storage is used.
 
 ## Required live verification before claiming completion
 
