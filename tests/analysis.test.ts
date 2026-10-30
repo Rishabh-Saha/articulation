@@ -131,6 +131,20 @@ describe('authenticated free-only video endpoint', () => {
     expect(response.status).toBe(503)
     expect(fetch).not.toHaveBeenCalled()
   })
+  it('identifies missing settings without leaking existing secret or identity values', async () => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    const env = environment()
+    env.AI_ENABLED = 'false'
+    env.FREE_TIER_CONFIRMED = ''
+    const response = await analyze(await request(), env, () => {})
+    const result = await response.json()
+    expect(result.missingConfiguration).toEqual(['AI_ENABLED', 'FREE_TIER_CONFIRMED'])
+    expect(result.error).toContain('AI_ENABLED, FREE_TIER_CONFIRMED')
+    expect(JSON.stringify(result)).not.toContain('server-secret')
+    expect(JSON.stringify(result)).not.toContain('owner')
+    expect(fetch).not.toHaveBeenCalled()
+  })
   it('verifies real JWT signatures and rejects wrong claims, expiry, providers and forged tokens', async () => {
     vi.stubGlobal('fetch', providerMock())
     await expect(verifyUser(await token(), environment())).resolves.toBeUndefined()

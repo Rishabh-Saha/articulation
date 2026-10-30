@@ -18,9 +18,10 @@ describe('Workers deployment routing', () => {
     )
     expect(response.status).toBe(503)
     expect(response.headers.get('content-type')).toContain('application/json')
-    expect(await response.json()).toEqual({
-      error: 'Automatic analysis is unavailable. Manual AI review still works.',
-    })
+    const result = await response.json()
+    expect(result.error).toContain('Automatic analysis setup is incomplete')
+    expect(result.missingConfiguration).toContain('AI_LIMITS')
+    expect(result.missingConfiguration).toContain('GEMINI_API_KEY')
     expect(env.ASSETS.fetch).not.toHaveBeenCalled()
   })
 

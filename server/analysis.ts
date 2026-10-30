@@ -82,18 +82,25 @@ export async function verifyUser(token: string, env: AnalysisEnv) {
     throw new ApiError(401, 'Sign in again with the permitted Google account.')
   }
 }
+export function configurationIssues(env: AnalysisEnv): string[] {
+  const issues: string[] = []
+  if (env.AI_ENABLED !== 'true') issues.push('AI_ENABLED')
+  if (env.FREE_TIER_CONFIRMED !== 'true') issues.push('FREE_TIER_CONFIRMED')
+  for (const name of [
+    'GEMINI_API_KEY',
+    'FIREBASE_PROJECT_ID',
+    'ALLOWED_UID',
+    'APP_ORIGIN',
+  ] as const) {
+    const value = env[name]
+    if (typeof value !== 'string' || !value.trim()) issues.push(name)
+  }
+  if (!env.GEMINI_MODEL || !/^[a-z0-9.-]+$/.test(env.GEMINI_MODEL)) issues.push('GEMINI_MODEL')
+  if (typeof env.AI_LIMITS?.prepare !== 'function') issues.push('AI_LIMITS')
+  return issues
+}
 export function configured(env: AnalysisEnv) {
-  return (
-    env.AI_ENABLED === 'true' &&
-    env.FREE_TIER_CONFIRMED === 'true' &&
-    !!env.GEMINI_API_KEY &&
-    !!env.GEMINI_MODEL &&
-    /^[a-z0-9.-]+$/.test(env.GEMINI_MODEL) &&
-    !!env.FIREBASE_PROJECT_ID &&
-    !!env.ALLOWED_UID &&
-    !!env.APP_ORIGIN &&
-    !!env.AI_LIMITS
-  )
+  return configurationIssues(env).length === 0
 }
 async function provider(response: Response) {
   if (response.status === 429)
@@ -118,8 +125,17 @@ export async function analyze(
       headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
     })
   try {
-    if (!configured(env))
-      throw new ApiError(503, 'Automatic analysis is unavailable. Manual AI review still works.')
+    const missingConfiguration = configurationIssues(env)
+    if (missingConfiguration.length) {
+      // Names only: never return configured values, credentials, project IDs or UIDs.
+      return json(
+        {
+          error: `Automatic analysis setup is incomplete. Check these Cloudflare settings: ${missingConfiguration.join(', ')}.`,
+          missingConfiguration,
+        },
+        503,
+      )
+    }
     // Same-origin backend: no wildcard CORS, previews and foreign origins are denied.
     if (
       request.headers.get('Origin') !== env.APP_ORIGIN ||

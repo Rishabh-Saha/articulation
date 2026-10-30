@@ -24,7 +24,7 @@ const analysis = await fetch(`${base}/api/analyze`, {
 assert.equal(analysis.status, 503)
 assert.match(analysis.headers.get('content-type') || '', /application\/json/)
 assert.equal(analysis.headers.get('cache-control'), 'no-store')
-assert.match((await analysis.json()).error, /Automatic analysis is unavailable/)
+assert.match((await analysis.json()).error, /Automatic analysis setup is incomplete/)
 console.log('PASS analysis reaches executable backend and stays disabled without configuration')
 
 for (const path of ['/api', '/api/missing', '/api/analyze/extra']) {
