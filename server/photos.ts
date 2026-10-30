@@ -49,7 +49,7 @@ function mediaUrl(value: string): URL {
     !(
       url.hostname === 'video-downloads.googleusercontent.com' ||
       /^lh\d+\.googleusercontent\.com$/.test(url.hostname) ||
-      /^(?:r\d+---)?sn-[a-z0-9-]+\.googlevideo\.com$/.test(url.hostname)
+      /^(?:r{1,2}\d+---)?sn-[a-z0-9-]+\.googlevideo\.com$/.test(url.hostname)
     )
   )
     throw new PhotosError(422, 'Google Photos did not provide a supported video download.')

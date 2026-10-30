@@ -73,7 +73,7 @@ export async function analyzeVideo({
             503: 'Automatic analysis is not configured. Use the manual review path below.',
           }
           throw Error(
-            (xhr.status === 503 &&
+            ((xhr.status === 503 || typeof response.step === 'string') &&
             typeof response.error === 'string' &&
             response.error.length < 1000
               ? response.error

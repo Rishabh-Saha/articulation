@@ -147,6 +147,25 @@ describe('bounded public video retrieval', () => {
     await expect(resolvePhotosVideo(short, 100)).rejects.toThrow()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+  it('accepts the standard rr Google video CDN redirect without sending credentials', async () => {
+    const fetch = vi.fn(async (input: URL, init?: RequestInit) => {
+      if (input.hostname === 'photos.google.com')
+        return new Response(html(), { headers: { 'Content-Type': 'text/html' } })
+      expect(init?.headers).toEqual({ Accept: 'video/mp4' })
+      if (input.hostname === 'lh3.googleusercontent.com')
+        return new Response(null, {
+          status: 302,
+          headers: { Location: 'https://rr1---sn-abc.googlevideo.com/videoplayback?fixture=1' },
+        })
+      return new Response(mp4, {
+        headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(mp4.length) },
+      })
+    })
+    vi.stubGlobal('fetch', fetch)
+    const source = await resolvePhotosVideo(share, 100)
+    expect(new Uint8Array(await new Response(source.body).arrayBuffer())).toEqual(mp4)
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
   it('does not follow a video redirect to an arbitrary host', async () => {
     const fetch = vi.fn(async (input: URL) =>
       input.hostname === 'photos.google.com'

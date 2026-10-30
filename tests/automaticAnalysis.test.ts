@@ -108,6 +108,17 @@ describe('in-app analysis transport', () => {
     await failed
     expect(xhr.send).toHaveBeenCalledTimes(1)
   })
+  it('preserves the safe backend failure step for a 502 response', async () => {
+    const { result, xhr } = await start()
+    const failed = expect(result).rejects.toThrow('Quota database: check the D1 binding')
+    xhr.status = 502
+    xhr.responseText = JSON.stringify({
+      error: 'Quota database: check the D1 binding',
+      step: 'quota',
+    })
+    xhr.onload()
+    await failed
+  })
   it('rejects malformed or unrelated feedback instead of saving it', async () => {
     const { result, xhr } = await start()
     const failed = expect(result).rejects.toThrow()

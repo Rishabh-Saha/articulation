@@ -1,6 +1,8 @@
 import { aiPrompt, parseAiReview } from '../src/model'
 import { PhotosError, readPhotosRequest, resolvePhotosVideo } from './photos'
 import type { VideoSource } from './photos'
+import { reserveQuota } from './quota'
+import type { QuotaDatabase } from './quota'
 
 // Structural Cloudflare D1 types keep this module testable without a provider SDK.
 export interface AnalysisEnv {
@@ -11,11 +13,7 @@ export interface AnalysisEnv {
   FIREBASE_PROJECT_ID?: string
   ALLOWED_UID?: string
   APP_ORIGIN?: string
-  AI_LIMITS?: {
-    prepare(sql: string): {
-      bind(...values: unknown[]): { first<T>(): Promise<T | null> }
-    }
-  }
+  AI_LIMITS?: QuotaDatabase
 }
 export const MAX_VIDEO_BYTES = 20 * 1024 * 1024
 const api = 'https://generativelanguage.googleapis.com'
@@ -102,11 +100,51 @@ export function configurationIssues(env: AnalysisEnv): string[] {
 export function configured(env: AnalysisEnv) {
   return configurationIssues(env).length === 0
 }
+const failureSteps = {
+  setup: 'AI setup',
+  authentication: 'Google sign-in verification',
+  request: 'Video request',
+  quota: 'Quota database',
+  photos: 'Google Photos retrieval',
+  uploadStart: 'Starting Gemini upload',
+  upload: 'Uploading video to Gemini',
+  processing: 'Gemini video processing',
+  analysis: 'Gemini review',
+  validation: 'Validating Gemini feedback',
+  cleanup: 'Deleting temporary video',
+} as const
+const failureHelp: Record<keyof typeof failureSteps, string> = {
+  setup: 'Check the Worker runtime settings.',
+  authentication: 'Sign in again with the permitted Google account.',
+  request: 'Check the selected video or share link.',
+  quota:
+    'Check that AI_LIMITS is a working D1 database binding. The quota table is initialized automatically when missing.',
+  photos:
+    'The server could not retrieve the shared video. Check that the individual video is accessible through link sharing.',
+  uploadStart:
+    'Gemini did not provide a usable upload session. Check the API key and project access.',
+  upload: 'The video transfer failed or was interrupted. No review was saved.',
+  processing: 'Gemini could not finish processing the video.',
+  analysis: 'Gemini could not return a review. Check model availability and video support.',
+  validation:
+    'Gemini returned feedback that does not match the required review format. No review was saved.',
+  cleanup:
+    'The temporary video could not be deleted. No review was saved; cleanup will be attempted again.',
+}
 async function provider(response: Response) {
   if (response.status === 429)
     throw new ApiError(429, 'Free quota exhausted. Try later or use the manual review path.')
-  if (!response.ok)
-    throw new ApiError(502, 'Video analysis provider failed. Use manual review or retry later.')
+  if (!response.ok) {
+    const advice =
+      response.status === 401 || response.status === 403
+        ? 'Check GEMINI_API_KEY and this project’s access; keep billing disabled.'
+        : response.status === 404
+          ? 'The requested model or file was not found. Check GEMINI_MODEL against AI Studio.'
+          : response.status === 400
+            ? 'The provider rejected this request. Check that the selected model supports video and JSON responses.'
+            : 'The provider is unavailable. Retry later.'
+    throw new ApiError(502, `Gemini returned HTTP ${response.status}. ${advice}`)
+  }
   return response
 }
 function fileName(name: unknown): string {
@@ -124,6 +162,7 @@ export async function analyze(
       status,
       headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
     })
+  let step: keyof typeof failureSteps = 'setup'
   try {
     const missingConfiguration = configurationIssues(env)
     if (missingConfiguration.length) {
@@ -145,7 +184,9 @@ export async function analyze(
     if (request.method !== 'POST') throw new ApiError(405, 'Use POST.')
     const bearer = request.headers.get('Authorization')?.match(/^Bearer (.+)$/)?.[1]
     if (!bearer) throw new ApiError(401, 'Sign in before analyzing.')
+    step = 'authentication'
     await verifyUser(bearer, env)
+    step = 'request'
     if (request.headers.get('X-Video-Consent') !== 'yes')
       throw new ApiError(400, 'Video sharing consent is required.')
     let source: VideoSource | undefined
@@ -164,24 +205,17 @@ export async function analyze(
     }
     // One atomic SQLite statement: concurrent requests cannot evade the 3/day, 1/minute cap.
     // Failed/cancelled attempts count too; never retry a provider call automatically.
-    const now = Date.now()
-    const slot = await env
-      .AI_LIMITS!.prepare(
-        `INSERT INTO analysis_limits (id, day, attempts, last_started)
-      VALUES (1, ?, 1, ?) ON CONFLICT(id) DO UPDATE SET
-      day = excluded.day, attempts = CASE WHEN day = excluded.day THEN attempts + 1 ELSE 1 END,
-      last_started = excluded.last_started
-      WHERE (day != excluded.day OR attempts < 3) AND last_started <= excluded.last_started - 60000
-      RETURNING attempts`,
-      )
-      .bind(new Date(now).toISOString().slice(0, 10), now)
-      .first()
+    step = 'quota'
+    const slot = await reserveQuota(env.AI_LIMITS!, Date.now())
     if (!slot)
       throw new ApiError(
         429,
         'Analysis limit reached (one per minute, three per UTC day). Use manual review or try later.',
       )
-    if (photosUrl) source = await resolvePhotosVideo(photosUrl, MAX_VIDEO_BYTES)
+    if (photosUrl) {
+      step = 'photos'
+      source = await resolvePhotosVideo(photosUrl, MAX_VIDEO_BYTES)
+    }
     const { body, length, filename } = source!
     const headers = { 'x-goog-api-key': env.GEMINI_API_KEY! }
     let remoteName: string | undefined
@@ -195,6 +229,7 @@ export async function analyze(
       if (!response.ok && response.status !== 404) throw Error('Temporary video cleanup failed')
     }
     try {
+      step = 'uploadStart'
       const start = await provider(
         await fetch(`${api}/upload/v1beta/files`, {
           method: 'POST',
@@ -237,6 +272,7 @@ export async function analyze(
           },
         }),
       )
+      step = 'upload'
       const uploaded = await provider(
         await fetch(upload, {
           method: 'POST',
@@ -256,6 +292,7 @@ export async function analyze(
         file: { name: string; uri: string; state: string }
       }
       remoteName = fileName(file.name)
+      step = 'processing'
       const deadline = Date.now() + 120000
       while (file.state === 'PROCESSING' && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 2000))
@@ -270,6 +307,7 @@ export async function analyze(
       }
       if (file.state !== 'ACTIVE' || file.uri !== `${api}/v1beta/${remoteName}`)
         throw new ApiError(502, 'Video could not be processed. Retry later or use manual review.')
+      step = 'analysis'
       const generated = await provider(
         await fetch(`${api}/v1beta/models/${env.GEMINI_MODEL}:generateContent`, {
           method: 'POST',
@@ -296,6 +334,7 @@ export async function analyze(
       const candidate = result.candidates?.[0]
       if (candidate?.finishReason !== 'STOP')
         throw new ApiError(502, 'Analysis was incomplete or blocked. Nothing was saved.')
+      step = 'validation'
       const parsed = parseAiReview(
         candidate.content?.parts?.map((p) => p.text ?? '').join('') ?? '',
       )
@@ -307,6 +346,7 @@ export async function analyze(
         fileMetadata: { ...parsed.fileMetadata, name: filename },
       }
       // Return only after deletion succeeds; never include upstream errors or secrets.
+      step = 'cleanup'
       await cleanup()
       remoteName = undefined
       return json({ review })
@@ -321,10 +361,8 @@ export async function analyze(
   } catch (error) {
     return json(
       {
-        error:
-          error instanceof ApiError || error instanceof PhotosError
-            ? error.message
-            : 'Analysis failed. Nothing was saved. Use manual review or retry later.',
+        error: `${failureSteps[step]}: ${error instanceof ApiError || error instanceof PhotosError ? error.message : failureHelp[step]}`,
+        step,
       },
       error instanceof ApiError || error instanceof PhotosError ? error.status : 502,
     )

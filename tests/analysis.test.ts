@@ -28,9 +28,9 @@ async function token(changes = {}, wrongSignature = false) {
   )
   return `${payload}.${wrongSignature ? 'invalid' : Buffer.from(signature).toString('base64url')}`
 }
-function environment() {
+function environment(initialize = true) {
   const db = new DatabaseSync(':memory:')
-  db.exec(readFileSync(new URL('../server/schema.sql', import.meta.url), 'utf8'))
+  if (initialize) db.exec(readFileSync(new URL('../server/schema.sql', import.meta.url), 'utf8'))
   return {
     AI_ENABLED: 'true',
     FREE_TIER_CONFIRMED: 'true',
@@ -40,6 +40,9 @@ function environment() {
     ALLOWED_UID: 'owner',
     APP_ORIGIN: 'https://journal.example',
     AI_LIMITS: {
+      exec: async (sql: string) => {
+        db.exec(sql)
+      },
       prepare: (sql: string) => ({
         bind: (...values: unknown[]) => ({
           first: async <T>() =>
@@ -215,6 +218,58 @@ describe('authenticated free-only video endpoint', () => {
     expect((await analyze(await request(), env, () => {})).status).toBe(502)
     expect(fetch.mock.calls.some(([url]) => String(url).includes('/upload/'))).toBe(false)
   })
+  it('initializes a new bound database before analysis without clearing future quota counts', async () => {
+    const fetch = providerMock()
+    vi.stubGlobal('fetch', fetch)
+    const env = environment(false)
+    const initialize = vi.spyOn(env.AI_LIMITS, 'exec')
+    expect((await analyze(await request(), env, () => {})).status).toBe(200)
+    expect((await analyze(await request(), env, () => {})).status).toBe(429)
+    expect(initialize).toHaveBeenCalledTimes(1)
+    expect(
+      fetch.mock.calls.filter(([url]) => String(url).includes(':generateContent')),
+    ).toHaveLength(1)
+  })
+  it('reports the failing stage without returning network exceptions or credentials', async () => {
+    const provider = providerMock()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input).includes('/upload/v1beta/files'))
+          throw Error('network URL contained server-secret')
+        return provider(input, init)
+      }),
+    )
+    const response = await analyze(await request(), environment(), () => {})
+    const result = await response.json()
+    expect(response.status).toBe(502)
+    expect(result.step).toBe('uploadStart')
+    expect(result.error).toContain('Starting Gemini upload')
+    expect(JSON.stringify(result)).not.toContain('server-secret')
+  })
+  it('includes a safe provider HTTP status for model/key diagnosis', async () => {
+    const provider = providerMock()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input).includes(':generateContent'))
+          return Response.json(
+            { error: { message: 'private provider details server-secret' } },
+            { status: 404 },
+          )
+        return provider(input, init)
+      }),
+    )
+    const tasks: Promise<unknown>[] = []
+    const response = await analyze(await request(), environment(), (task) => tasks.push(task))
+    await Promise.all(tasks)
+    const result = await response.json()
+    expect(response.status).toBe(502)
+    expect(result.step).toBe('analysis')
+    expect(result.error).toContain('HTTP 404')
+    expect(result.error).toContain('GEMINI_MODEL')
+    expect(JSON.stringify(result)).not.toContain('server-secret')
+  })
   it('retrieves a shared Photos video through the authenticated capped pipeline', async () => {
     const provider = providerMock()
     const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -286,7 +341,11 @@ describe('authenticated free-only video endpoint', () => {
       const response = await analyze(await request(), environment(), (task) => tasks.push(task))
       await Promise.all(tasks)
       expect(response.status).toBe(options.quota ? 429 : 502)
-      expect((await response.json()).review).toBeUndefined()
+      const result = await response.json()
+      expect(result.review).toBeUndefined()
+      expect(result.step).toBe(
+        options.invalid ? 'validation' : options.quota ? 'analysis' : 'cleanup',
+      )
       expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true)
     },
   )

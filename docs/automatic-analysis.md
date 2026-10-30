@@ -24,7 +24,7 @@ The message **“Bindings cannot be added to a Worker that only has static asset
 
 ### Add the free quota database
 
-Create/select the dedicated Free-plan D1 database **`articulation-ai-limits`**, open its Console, and run this idempotent statement (also in `server/schema.sql`):
+Create/select the dedicated Free-plan D1 database **`articulation-ai-limits`**. Once bound as `AI_LIMITS`, the Worker automatically creates its quota table if missing on the first analysis request. It never clears existing counters. The equivalent idempotent statement is available in `server/schema.sql` (or can be run manually in the D1 Console when diagnosing setup):
 
 ```sql
 CREATE TABLE IF NOT EXISTS analysis_limits (
@@ -51,7 +51,7 @@ Use the existing Worker's **Settings → Variables and Secrets**:
 - `FREE_TIER_CONFIRMED=true`: only after verifying current model eligibility and the unbilled project.
 - `AI_ENABLED=true`: activation switch, initially absent. Enable only for controlled real-media validation, then for normal use after it passes. Removing it disables analysis without changing journal data.
 
-A **503 “Automatic analysis setup is incomplete”** response lists missing or invalid binding/variable names, never their values. Add or correct those names on the **existing Worker's runtime Variables and Secrets/Bindings**, not only its frontend build settings. `AI_ENABLED` and `FREE_TIER_CONFIRMED` require the exact string `true`; confirm the unbilled project's free-tier eligibility before setting the latter. `AI_LIMITS` is a D1 database binding rather than a text variable. Save/deploy the runtime settings before retrying. A valid configuration is still subject to Google authentication, quotas, and real-video verification.
+A **503 “Automatic analysis setup is incomplete”** response lists missing or invalid binding/variable names, never their values. Add or correct those names on the **existing Worker's runtime Variables and Secrets/Bindings**, not only its frontend build settings. `AI_ENABLED` and `FREE_TIER_CONFIRMED` require the exact string `true`; confirm the unbilled project's free-tier eligibility before setting the latter. `AI_LIMITS` is a D1 database binding rather than a text variable. Save/deploy the runtime settings before retrying. Runtime failures include a safe step label for quota storage, Photos retrieval, Gemini upload/processing/review, result validation, or cleanup. Provider HTTP codes are included without raw upstream messages or credentials. Only a missing `analysis_limits` table triggers automatic schema creation; other database failures remain blocked. A valid configuration is still subject to Google authentication, quotas, and real-video verification.
 
 Keep the selected Workers runtime on the Free plan. Validate its streaming and request duration limits with real media; an asset-only deployment or Vite server does not prove the backend works.
 
