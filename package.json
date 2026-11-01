@@ -15,6 +15,7 @@
     "test:worker": "node tests/worker-smoke.mjs",
     "test:rules": "node tests/rules.mjs",
     "test:e2e": "node tests/smoke.mjs",
+    "test:manual-review": "node tests/manual-review.mjs",
     "test:cloud": "node tests/cloud-smoke.mjs",
     "test:a11y": "node tests/accessibility.mjs",
     "test:safety": "node tests/safety-smoke.mjs",

@@ -68,7 +68,7 @@ The AI review tab defaults to the saved Google Photos share link. After explicit
 
 Use the **AI review** tab to copy the exact rubric prompt. In Google AI Studio, independently verify a video-capable model currently has a free tier and choose it explicitly. Read the privacy terms before attaching your local file. Free-tier Gemini content may be used to improve provider products. This external upload is your action; the app receives only the JSON you deliberately import.
 
-The importer requires all 12 criteria, nullable integer 1–5 scores, evidence, suggestions, model, prompt version, filename, analysis date, strengths, improvements, exercise, and limitations. Unknown modalities remain **Not assessed**. User confirmation that the actual video was supplied is required. Averages are recomputed; model-supplied averages are ignored. Each import adds a version; it never replaces self-ratings or old AI reviews. Model filler counts and timestamps are estimates, not verified facts.
+The importer requires all 12 criteria, nullable integer 1–5 scores, evidence, suggestions, model, prompt version, filename, analysis date, strengths, improvements, exercise, and limitations. Unknown modalities remain **Not assessed**. User confirmation that the actual video was supplied is required. Averages are recomputed; model-supplied averages are ignored. Each import adds a version; it never replaces self-ratings or old AI reviews. Model filler counts and timestamps are estimates, not verified facts. Filler confidence is optional; omitted values display “confidence not provided.” Pasted line breaks inside JSON strings are preserved, and validation errors identify the affected fields.
 
 Before activating automatic analysis, separately verify current official pricing/model availability and prove a streaming/resumable upload path with real media. The backend must verify Firebase JWT signatures and claims, restrict to a single allowed UID, enforce MIME/size/rate/daily caps, restrict CORS to the deployed origin, retain no permanent video, and keep the API key in a Worker secret. Do not expose a key or use an insecure stub to bypass those prerequisites.
 
@@ -104,6 +104,7 @@ npm run build
 npm audit --omit=dev
 # With npm run dev running, and Chromium installed:
 npm run test:e2e
+npm run test:manual-review
 npm run test:a11y
 npm run test:safety
 ```

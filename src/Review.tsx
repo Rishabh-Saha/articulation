@@ -353,8 +353,10 @@ export function AiReviews({
                   <strong>{item.score ?? 'Not assessed'}</strong>
                   <ChevronDown size={14} />
                 </summary>
-                <p>{item.evidence || 'No evidence supplied.'}</p>
-                {item.suggestion && <p className="accent">Try: {item.suggestion}</p>}
+                <p className="preserve-whitespace">{item.evidence || 'No evidence supplied.'}</p>
+                {item.suggestion && (
+                  <p className="accent preserve-whitespace">Try: {item.suggestion}</p>
+                )}
                 {!!item.timestamps.length && (
                   <p className="subtle">Model-supplied timestamps: {item.timestamps.join(', ')}</p>
                 )}
@@ -387,7 +389,8 @@ export function AiReviews({
                 <div className="review-meta">
                   {review.fillerCounts.map((f, i) => (
                     <span className="badge" key={i}>
-                      {f.word}: {f.count} · {f.confidence} confidence
+                      {f.word}: {f.count} ·{' '}
+                      {f.confidence ? `${f.confidence} confidence` : 'confidence not provided'}
                     </span>
                   ))}
                 </div>
@@ -463,9 +466,10 @@ export function AiReviews({
                 try {
                   setPreview(parseAiReview(raw))
                   setError('')
-                } catch {
+                } catch (error) {
+                  setPreview(null)
                   setError(
-                    'Invalid review. Use the copied rubric prompt and include all 12 criteria, scores of 1–5 or null, evidence, model, prompt version, file name, and an ISO analysis date. Nothing was saved.',
+                    `${error instanceof Error ? error.message : 'Invalid review.'} Nothing was saved.`,
                   )
                 }
               }}

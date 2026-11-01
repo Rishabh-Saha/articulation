@@ -134,6 +134,69 @@ describe('structured AI reviews', () => {
   function template() {
     return JSON.parse(aiPrompt().split('JSON structure:\n')[1])
   }
+  it('accepts all 12 scored criteria without filler confidence and round-trips history', () => {
+    const input = template()
+    for (const item of [...Object.values(input.audioScores), ...Object.values(input.visualScores)])
+      (item as { score: number }).score = 4
+    input.fillerCounts = [
+      { word: 'um', count: 2 },
+      { word: 'like', count: 1, confidence: 'low' },
+    ]
+    const review = parseAiReview(JSON.stringify(input))
+    expect(review.fillerCounts[0]).toEqual({ word: 'um', count: 2 })
+    expect(review.fillerCounts[1].confidence).toBe('low')
+    const entry = blankDay(1)
+    entry.reflection.notes = 'Keep my journal'
+    entry.aiReviews = [
+      { ...review, id: 'old' },
+      { ...review, id: 'new' },
+    ]
+    expect(scores(entry, true).combined).toBe(4)
+    expect(parseBackup(JSON.parse(JSON.stringify(createExport({ 1: entry })))).entries).toEqual([
+      entry,
+    ])
+  })
+  it('preserves pasted LF, CRLF, quotes, backslashes, and existing JSON escapes', () => {
+    const input = template()
+    const evidence = 'First "quote" and path C:\\video\nSecond\r\nThird\rFourth'
+    input.audioScores.rate.evidence = evidence
+    input.strengths = [evidence]
+    const json = JSON.stringify(input, null, 2)
+    const pasted = json.replaceAll('\\r', '\r').replaceAll('\\n', '\n')
+    expect(parseAiReview('```json\n' + pasted + '\n```').audioScores.rate.evidence).toBe(evidence)
+    expect(parseAiReview(pasted).strengths).toEqual([evidence])
+    expect(parseAiReview(json).audioScores.rate.evidence).toBe(evidence)
+  })
+  it.each([0, 6, 2.5, '3'])('still rejects invalid score %s with its field path', (score) => {
+    const input = template()
+    input.audioScores.rate.score = score
+    expect(() => parseAiReview(JSON.stringify(input))).toThrow(/audioScores\.rate\.score:/)
+  })
+  it.each([
+    'model',
+    'promptVersion',
+    'analyzedAt',
+    'fileMetadata',
+    'strengths',
+    'improvements',
+    'tomorrowExercise',
+    'limitations',
+  ])('still requires %s', (field) => {
+    const input = template()
+    delete input[field]
+    expect(() => parseAiReview(JSON.stringify(input))).toThrow(new RegExp(field + ':'))
+  })
+  it('reports separate syntax and field errors without relaxing filler validation', () => {
+    expect(() => parseAiReview('{"model":')).toThrow(/Invalid JSON:/)
+    const input = template()
+    input.fillerCounts = [{ word: 'um', count: -1, confidence: 'certain' }]
+    input.analyzedAt = 'yesterday'
+    delete input.visualScores.face
+    expect(() => parseAiReview(JSON.stringify(input))).toThrow(/fillerCounts\.0\.confidence:/)
+    expect(() => parseAiReview(JSON.stringify(input))).toThrow(/fillerCounts\.0\.count:/)
+    expect(() => parseAiReview(JSON.stringify(input))).toThrow(/analyzedAt:/)
+    expect(() => parseAiReview(JSON.stringify(input))).toThrow(/visualScores\.face:/)
+  })
   it('keeps unknown scores null and disregards claimed averages', () => {
     const input = template()
     input.audioScores.rate.score = 3

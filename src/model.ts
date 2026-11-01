@@ -70,7 +70,7 @@ export const aiReviewSchema = z.object({
       z.object({
         word: z.string().max(100),
         count: z.number().int().nonnegative(),
-        confidence: z.enum(['low', 'medium', 'high']),
+        confidence: z.enum(['low', 'medium', 'high']).optional(),
       }),
     )
     .max(100)
@@ -258,10 +258,42 @@ export function parseBackup(input: unknown): { entries: DayEntry[]; legacy: bool
   return { entries: entries.filter(hasContent), legacy: true }
 }
 
+// Escape only literal line breaks inside strings; leave JSON structure and escapes intact.
+function escapeQuotedLineBreaks(raw: string) {
+  let quoted = false
+  let escaped = false
+  let result = ''
+  for (const char of raw) {
+    if (quoted && (char === '\n' || char === '\r')) {
+      result += char === '\n' ? '\\n' : '\\r'
+    } else {
+      result += char
+    }
+    if (char === '"' && !escaped) quoted = !quoted
+    escaped = char === '\\' && !escaped
+  }
+  return result
+}
+
 export function parseAiReview(raw: string): AiReview {
-  return aiReviewSchema.parse(
-    JSON.parse(raw.replace(/^\s*```(?:json)?\s*/, '').replace(/\s*```\s*$/, '')),
-  )
+  const json = raw.replace(/^\s*```(?:json)?\s*/, '').replace(/\s*```\s*$/, '')
+  let input: unknown
+  try {
+    input = JSON.parse(escapeQuotedLineBreaks(json))
+  } catch (error) {
+    throw Error(`Invalid JSON: ${error instanceof Error ? error.message : 'Check JSON syntax.'}`, {
+      cause: error,
+    })
+  }
+  const result = aiReviewSchema.safeParse(input)
+  if (!result.success) {
+    throw Error(
+      result.error.issues
+        .map((issue) => `${issue.path.join('.') || 'review'}: ${issue.message}`)
+        .join('; '),
+    )
+  }
+  return result.data
 }
 export function aiPrompt() {
   const shape = (criteria: readonly { id: string }[]) =>
