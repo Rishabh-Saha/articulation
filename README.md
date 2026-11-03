@@ -23,6 +23,7 @@ The app works without Firebase in **device-only mode**. No sample scores or base
 - A searchable **Notebook** for all 42 days, with free-form notes and reflections shared with the session view. Old entries and backups default the new notes field to an empty string.
 - HTTPS Google Photos or other external video links, opened in a new tab. With explicit AI consent, the backend can attempt to retrieve an individual shared Photos video for review; other links are viewing references only.
 - Self / AI audio, visual, and combined trends. Unrated days are gaps, not zeroes; combined averages give each assessed criterion equal weight.
+- **Your progress** also combines recent AI feedback and personal reflections into strengths, current practice areas, next-video focus, and criterion-level rating increases. Every highlight links to its source day. The summary updates locally from saved entries with no additional AI calls or cost. It uses the latest review per day, keeps self and AI comparisons separate, and compares AI ratings only within the same model and prompt version.
 - Optional Google sign-in, Firestore subscription, per-day transactional revisions, debounced cloud writes, durable local pending queue, explicit conflict resolution, and account-isolated local storage.
 - Versioned JSON export of all 42 entries; validated, previewed import with **keep existing** as the default. Per-day replacement requires an explicit selection.
 - Migration of the actual supplied HTML's `{version:1, records:{...}}` export. Legacy AI notes and the single legacy score are preserved separately, excluded from structured AI trends.
@@ -105,6 +106,7 @@ npm audit --omit=dev
 # With npm run dev running, and Chromium installed:
 npm run test:e2e
 npm run test:manual-review
+npm run test:progress
 npm run test:a11y
 npm run test:safety
 ```

@@ -25,6 +25,7 @@ Gemini automation is a separate, incomplete milestone. See [implementation and a
 ## Regression checks
 
 - `npm test`: old backups, notes-only days, durable drafts, edits during save, read-only store writes, conflicts, and missing-cloud recovery.
+- `npm run test:progress`: combines saved AI feedback and personal reflections, compares criterion ratings across days, links highlights to source sessions, updates after edits and reloads, and checks desktop/mobile accessibility. The summary adds no AI calls, storage writes, or schema migration.
 - `npm run test:safety`: two tabs sharing browser storage, import blocked in a read-only tab, safe editor handoff, reload persistence, one shared note between Notebook and Reflection, search, backup coverage, and mobile layout.
 - `npm run test:cloud`: isolated browsers, offline conflicts, notes sync, unexpected deletion in the demo emulator, truthful missing-copy status, and explicit restoration.
 - `npm run test:rules`: account isolation, rating validation, full scored records with notes, stale revisions, and deletion prevention.

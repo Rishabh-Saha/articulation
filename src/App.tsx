@@ -45,6 +45,7 @@ import type { Metric } from './Chart'
 import Backup, { downloadJson } from './Backup'
 import Modal from './Modal'
 import Notebook from './Notebook'
+import ProgressSummary from './ProgressSummary'
 import { AiReviews, Feedback, Reflection, SelfReview } from './Review'
 
 type Page = { view: 'journal' | 'progress' | 'notes' } | { view: 'day'; day: number }
@@ -756,6 +757,7 @@ function App() {
                     note="Days with structured feedback"
                   />
                 </section>
+                <ProgressSummary records={records} />
                 <ProgressChart records={records} />
                 <div className="two-charts">
                   <section className="panel">
