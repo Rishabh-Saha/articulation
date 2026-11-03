@@ -284,11 +284,21 @@ export default function PublicJournal() {
           View only
         </span>
       </header>
-      <div className="page-heading">
+      <div className="page-heading public-intro">
         <div>
-          <div className="eyebrow">ARTICULATION LAB · SHARED JOURNAL</div>
+          <div className="eyebrow">ARTICULATION LAB · A 42-DAY SPEAKING CHALLENGE</div>
           <h1>{snapshot?.title || 'Speaking journal'}</h1>
-          <p>Follow the practice, feedback, and progress. No sign-in needed to view.</p>
+          <p className="public-lead">
+            Follow a personal 42-day speaking challenge: record about a minute each day, review how
+            it sounds and looks, and choose one thing to practise next. The goal is clearer, more
+            deliberate speaking through small, consistent changes.
+          </p>
+          <p className="public-guide">
+            Open <strong>Journal</strong> for daily video links, self-reviews, and AI feedback when
+            available. Explore <strong>Progress</strong> for strengths and rating changes, or{' '}
+            <strong>Notes &amp; reflections</strong> for the thoughts behind each session. You can
+            browse without signing in.
+          </p>
         </div>
       </div>
       {loading ? (

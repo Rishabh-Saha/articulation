@@ -1113,8 +1113,32 @@ select:focus {
 .public-header {
   justify-content: space-between;
 }
+.public-intro {
+  max-width: 780px;
+  margin-top: 32px;
+}
+.public-intro .public-lead {
+  margin-top: 16px;
+  color: var(--soft);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.public-intro .public-guide {
+  margin-top: 14px;
+  color: var(--soft);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.public-guide strong {
+  color: #e2dfeb;
+  font-weight: 500;
+}
 .public-tabs {
   margin-top: 20px;
+}
+.public-tabs .button {
+  /* Keep foreground and background colors in sync when the selected tab changes. */
+  transition: transform 0.15s;
 }
 .public-day,
 .public-note {
