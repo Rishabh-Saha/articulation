@@ -1,5 +1,6 @@
 import { analyze } from './analysis'
 import type { AnalysisEnv } from './analysis'
+import { publicJournal } from './sharing'
 
 interface WorkerEnv extends AnalysisEnv {
   ASSETS: { fetch(request: Request): Promise<Response> }
@@ -12,6 +13,8 @@ export default {
     context: { waitUntil(task: Promise<unknown>): void },
   ): Promise<Response> {
     const { pathname } = new URL(request.url)
+    if (pathname === '/api/public-journal' || pathname === '/api/sharing')
+      return publicJournal(request, env)
     if (pathname === '/api/analyze') {
       return analyze(request, env, (task) => context.waitUntil(task))
     }

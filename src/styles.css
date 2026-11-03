@@ -1097,6 +1097,130 @@ select:focus {
 .trend-panel {
   margin-top: 28px;
 }
+.public-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+.public-header,
+.public-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.public-header {
+  justify-content: space-between;
+}
+.public-tabs {
+  margin-top: 20px;
+}
+.public-day,
+.public-note {
+  margin-top: 18px;
+  overflow-wrap: anywhere;
+}
+.public-day > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.public-day[open] > summary {
+  margin-bottom: 20px;
+}
+.public-section {
+  margin: 20px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.public-section > summary {
+  color: var(--accent);
+  font-size: 14px;
+  cursor: pointer;
+}
+.public-text {
+  margin-top: 20px;
+}
+.public-text h3 {
+  margin-bottom: 7px;
+}
+.public-text p,
+.public-text li {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.public-text ul {
+  padding-left: 22px;
+}
+.public-text li + li {
+  margin-top: 6px;
+}
+.sharing-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+.sharing-toggle strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.sharing-toggle small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--soft);
+}
+.sharing-toggle input {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+.sharing-preview {
+  margin-top: 24px;
+}
+.sharing-preview > summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+}
+.sharing-alert {
+  position: fixed;
+  z-index: 90;
+  right: 20px;
+  bottom: 20px;
+  max-width: min(430px, calc(100vw - 40px));
+  padding: 18px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.sharing-alert p {
+  margin-bottom: 12px;
+}
+@media (max-width: 600px) {
+  .public-shell {
+    padding: 20px 16px 40px;
+  }
+  .public-day > summary {
+    flex-wrap: wrap;
+    font-size: 14px;
+  }
+  .sharing-toggle {
+    padding: 14px;
+  }
+}
 .progress-summary {
   margin-top: 28px;
 }

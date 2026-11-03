@@ -25,6 +25,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Eye,
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -46,6 +47,7 @@ import Backup, { downloadJson } from './Backup'
 import Modal from './Modal'
 import Notebook from './Notebook'
 import ProgressSummary from './ProgressSummary'
+import SharingControl from './SharingControl'
 import { AiReviews, Feedback, Reflection, SelfReview } from './Review'
 
 type Page = { view: 'journal' | 'progress' | 'notes' } | { view: 'day'; day: number }
@@ -81,7 +83,9 @@ function App() {
   const { records, store, user } = journal
   const [page, setPage] = useState<Page>(readPage)
   const [week, setWeek] = useState<number | null>(null)
-  const [modal, setModal] = useState<'backup' | 'settings' | 'guide' | 'signout' | null>(null)
+  const [modal, setModal] = useState<
+    'backup' | 'settings' | 'guide' | 'signout' | 'sharing' | null
+  >(null)
   const [signoutExported, setSignoutExported] = useState(false)
   const [guestEntries, setGuestEntries] = useState<DayEntry[] | undefined>()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -257,6 +261,16 @@ function App() {
             <ArrowDownToLine size={18} />
             Backups & import
           </button>
+          <button className="nav-item" onClick={() => setModal('sharing')}>
+            <Eye size={18} />
+            Public viewing
+          </button>
+          {!user && (
+            <a className="nav-item" href="/view">
+              <ExternalLink size={18} />
+              View shared journal
+            </a>
+          )}
         </nav>
         <div className="sidebar-challenge">
           <div className="sidebar-challenge-label">
@@ -901,6 +915,23 @@ function App() {
           </footer>
         </main>
       </div>
+      <SharingControl
+        user={user}
+        records={records}
+        ready={
+          journal.ready &&
+          journal.canEdit &&
+          journal.online &&
+          !journal.error &&
+          !journal.storageError &&
+          !pending &&
+          !conflictDays.length &&
+          !journal.missingCloudDays.length
+        }
+        open={modal === 'sharing'}
+        close={() => setModal(null)}
+        show={() => setModal('sharing')}
+      />
       {modal === 'backup' && (
         <Backup
           records={records}

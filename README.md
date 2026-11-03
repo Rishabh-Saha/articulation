@@ -25,6 +25,7 @@ The app works without Firebase in **device-only mode**. No sample scores or base
 - Self / AI audio, visual, and combined trends. Unrated days are gaps, not zeroes; combined averages give each assessed criterion equal weight.
 - **Your progress** also combines recent AI feedback and personal reflections into strengths, current practice areas, next-video focus, and criterion-level rating increases. Every highlight links to its source day. The summary updates locally from saved entries with no additional AI calls or cost. It uses the latest review per day, keeps self and AI comparisons separate, and compares AI ratings only within the same model and prompt version.
 - Optional Google sign-in, Firestore subscription, per-day transactional revisions, debounced cloud writes, durable local pending queue, explicit conflict resolution, and account-isolated local storage.
+- Optional **Public viewing** at `/view`, controlled by a persistent database flag that starts off. Anonymous visitors can read the full published journal, including notes, reflections, video links and review history, only while the owner enables it. Private Firestore records and editing remain owner-only.
 - Versioned JSON export of all 42 entries; validated, previewed import with **keep existing** as the default. Per-day replacement requires an explicit selection.
 - Migration of the actual supplied HTML's `{version:1, records:{...}}` export. Legacy AI notes and the single legacy score are preserved separately, excluded from structured AI trends.
 - Manual AI Studio prompt / structured JSON import, validated with Zod, with provenance and full review history. The optional in-app MP4 analysis implementation uses a disabled-by-default authenticated Worker/Pages backend; manual review remains available.
@@ -73,6 +74,16 @@ The importer requires all 12 criteria, nullable integer 1–5 scores, evidence, 
 
 Before activating automatic analysis, separately verify current official pricing/model availability and prove a streaming/resumable upload path with real media. The backend must verify Firebase JWT signatures and claims, restrict to a single allowed UID, enforce MIME/size/rate/daily caps, restrict CORS to the deployed origin, retain no permanent video, and keep the API key in a Worker secret. Do not expose a key or use an insecure stub to bypass those prerequisites.
 
+## Public view-only journal
+
+After deploying the executable Worker, sign in as the permitted owner and open **Public viewing** in the sidebar. Preview the full journal, then use **Public view-only access** to enable or disable anonymous reading at `https://YOUR_EXISTING_HOST/view`. The flag is off by default; deploying code does not publish any journal content. The full published copy includes notes, reflections, self reviews, AI review history, outside feedback and video links. Video providers still enforce their own playback permissions.
+
+This reuses the existing `AI_LIMITS` D1 binding and the server-side `ALLOWED_UID`, `FIREBASE_PROJECT_ID` and `APP_ORIGIN` settings. It needs no new keys, paid services or Firebase rules changes. Public sharing does not require automatic AI analysis to be enabled. A separate `public_journal` table is created on the first owner-authorized enable operation; no existing tables, quota counters or private journal records are reset. Its `enabled` column is the server-enforced switch. Turning it off retains the copy but makes public reads return 404. Turning it on again publishes the current journal. The public copy has a 1 MiB limit; exceeding it leaves the existing copy and private journal unchanged.
+
+While enabled, the signed-in editing tab updates the copy after confirmed cloud saves. Pending/offline edits, conflicts and missing-cloud recovery pause publishing. Update failures are surfaced, and the last successfully published timestamp remains visible. An update in flight cannot re-enable viewing after the flag is disabled. The public page refreshes on focus and every 30 seconds while visible, sends no credentials, initializes no private Firebase session, and never writes journal data. API responses use `no-store`; disabling access stops new reads but cannot retract content someone has already seen or copied.
+
+`GET /api/public-journal` reads only the enabled public copy. `GET /api/sharing` reads the owner-only switch state. `PUT /api/sharing` changes the switch; `PUT /api/public-journal` updates an already enabled copy. Mutations require a verified Google ID token for `ALLOWED_UID` and the configured same origin. No private Firestore paths are made public.
+
 ## Keep the existing Cloudflare Worker
 
 The current deployment uses **Workers**, with the `articulation.rsaha130.workers.dev` address. Keep that existing Worker. `wrangler.jsonc` now includes the executable `server/worker.ts` backend and static `dist` assets. The build command is `npm run build` and the deploy command is `npx wrangler deploy`. Preserve the existing Firebase build variables. After this code is deployed, the Worker can accept the `AI_LIMITS` D1 binding; an asset-only Worker cannot. The [activation guide](docs/automatic-analysis.md#existing-cloudflare-worker-keep-this-deployment) covers the exact order and free-only account settings. No site-address or journal-data migration is needed.
@@ -107,6 +118,7 @@ npm audit --omit=dev
 npm run test:e2e
 npm run test:manual-review
 npm run test:progress
+npm run test:sharing
 npm run test:a11y
 npm run test:safety
 ```

@@ -9,6 +9,20 @@ function setup() {
 }
 
 describe('Workers deployment routing', () => {
+  it.each(['/api/public-journal', '/api/sharing'])(
+    'routes %s to sharing rather than the SPA fallback',
+    async (path) => {
+      const { env, context } = setup()
+      const response = await worker.fetch(
+        new Request(`https://journal.example${path}`),
+        env,
+        context,
+      )
+      expect(response.status).toBe(503)
+      expect(response.headers.get('content-type')).toContain('application/json')
+      expect(env.ASSETS.fetch).not.toHaveBeenCalled()
+    },
+  )
   it('routes analysis to the backend even when its bindings are not configured', async () => {
     const { env, context } = setup()
     const response = await worker.fetch(
