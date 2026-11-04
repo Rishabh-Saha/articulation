@@ -66,6 +66,7 @@ function publication() {
   const entry = blankDay(1)
   entry.topic = 'A public practice fixture'
   entry.reflection.notes = 'Full journal notes'
+  entry.bootcampLesson = 'Fixing filler words'
   entry.reflection.strengths = 'A clear opening'
   entry.reflection.improvements = 'Slow down'
   entry.reflection.tomorrowFocus = 'Pause'
@@ -148,6 +149,7 @@ describe('public viewing database flag and owner authorization', () => {
     response = await publicJournal(await request('/api/public-journal'), env)
     const shared = await response.json()
     expect(shared.entries[0].reflection.notes).toBe('Full journal notes')
+    expect(shared.entries[0].bootcampLesson).toBe('Fixing filler words')
     expect(shared.entries[0].aiReviews).toHaveLength(2)
     expect(shared.entries[0].video.url).toBe(original.entries[0].video.url)
     expect(shared).not.toHaveProperty('owner_uid')

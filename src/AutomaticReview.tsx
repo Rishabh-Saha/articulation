@@ -53,6 +53,13 @@ export default function AutomaticReview({ entry, update }: { entry: DayEntry; up
       setError('')
     }
   }, [entry.video.url, source])
+  useEffect(() => {
+    controller.current?.abort()
+    setResult(null)
+    setPhase('idle')
+    setConsent(false)
+    setError('')
+  }, [entry.bootcampLesson])
   async function chooseFile(selected: File | null) {
     const version = ++selectionVersion.current.version
     setFile(selected)
@@ -100,8 +107,15 @@ export default function AutomaticReview({ entry, update }: { entry: DayEntry; up
               token,
               signal: pending.signal,
               onPhase: setPhase,
+              bootcampLesson: entry.bootcampLesson,
             })
-          : await analyzeVideo({ file: file!, token, signal: pending.signal, onPhase: setPhase })
+          : await analyzeVideo({
+              file: file!,
+              token,
+              signal: pending.signal,
+              onPhase: setPhase,
+              bootcampLesson: entry.bootcampLesson,
+            })
       if (!pending.signal.aborted) {
         setReviewLink(source === 'photos' ? entry.video.url : null)
         setResult(review)
@@ -184,8 +198,9 @@ export default function AutomaticReview({ entry, update }: { entry: DayEntry; up
           disabled={busy}
           onChange={(event) => setConsent(event.target.checked)}
         />
-        I want to send this day’s video to Google Gemini. Free-tier content may be used to improve
-        Google’s products. The video is uploaded temporarily; it is never stored in my journal.
+        I want to send this day’s video and any saved bootcamp lesson to Google Gemini. Free-tier
+        content may be used to improve Google’s products. The video is uploaded temporarily; it is
+        never stored in my journal.
       </label>
       <p className="fine-print">
         Requires the configured free-only backend and permitted Google account. At most one attempt

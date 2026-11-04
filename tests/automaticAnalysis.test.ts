@@ -35,7 +35,7 @@ const file = () =>
   new File([new Uint8Array([0, 0, 0, 12, 102, 116, 121, 112, 105, 115, 111, 109])], 'day.mp4', {
     type: 'video/mp4',
   })
-async function start() {
+async function start(bootcampLesson?: string) {
   vi.stubGlobal('XMLHttpRequest', FakeRequest)
   const controller = new AbortController()
   const onPhase = vi.fn()
@@ -44,6 +44,7 @@ async function start() {
     token: 'firebase-token',
     signal: controller.signal,
     onPhase,
+    bootcampLesson,
   })
   // Local Blob validation completes asynchronously before creating the request.
   await vi.waitFor(() => expect(FakeRequest.current.send).toHaveBeenCalled())
@@ -85,6 +86,30 @@ describe('video selection errors', () => {
   })
 })
 describe('in-app analysis transport', () => {
+  it('sends the selected day’s lesson intact with a local MP4', async () => {
+    const lesson = 'Fixing filler words — pause instead of “um”.\nFinish each thought.'
+    const { result, xhr } = await start(lesson)
+    expect(decodeURIComponent(xhr.headers['X-Bootcamp-Lesson'])).toBe(lesson)
+    const review = JSON.parse(aiPrompt().split('JSON structure:\n')[1])
+    review.fileMetadata.name = 'day.mp4'
+    xhr.responseText = JSON.stringify({ review })
+    xhr.onload()
+    await expect(result).resolves.toHaveProperty('fileMetadata.name', 'day.mp4')
+  })
+  it('rejects an oversized lesson before starting an upload', async () => {
+    const xhr = vi.fn()
+    vi.stubGlobal('XMLHttpRequest', xhr)
+    await expect(
+      analyzeVideo({
+        file: file(),
+        token: 'fixture-token',
+        signal: new AbortController().signal,
+        onPhase: vi.fn(),
+        bootcampLesson: 'x'.repeat(2001),
+      }),
+    ).rejects.toThrow()
+    expect(xhr).not.toHaveBeenCalled()
+  })
   it('sends only the selected video to the same origin and reports upload/analysis states', async () => {
     const { result, onPhase, xhr } = await start()
     expect(xhr.open).toHaveBeenCalledWith('POST', '/api/analyze')
@@ -144,10 +169,25 @@ describe('in-app analysis transport', () => {
 })
 
 describe('Google Photos analysis transport', () => {
+  it('includes the saved lesson with a Google Photos analysis request', async () => {
+    const lesson = 'Filler words — use a pause instead of “um”.'
+    const review = JSON.parse(aiPrompt().split('JSON structure:\n')[1])
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ review }))
+    vi.stubGlobal('fetch', fetch)
+    await analyzePhotosVideo({
+      photosUrl: 'https://photos.app.goo.gl/fixture',
+      token: 'fixture-token',
+      signal: new AbortController().signal,
+      onPhase: vi.fn(),
+      bootcampLesson: lesson,
+    })
+    const headers = fetch.mock.calls[0][1]!.headers as Record<string, string>
+    expect(decodeURIComponent(headers['X-Bootcamp-Lesson'])).toBe(lesson)
+  })
   it('uses the saved share link with explicit consent, without a local file', async () => {
     const review = JSON.parse(aiPrompt().split('JSON structure:\n')[1])
     review.fileMetadata.name = 'Google Photos video.mp4'
-    const fetch = vi.fn(async () => Response.json({ review }))
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ review }))
     vi.stubGlobal('fetch', fetch)
     const onPhase = vi.fn()
     const photosUrl = 'https://photos.app.goo.gl/fixture'

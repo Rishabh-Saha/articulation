@@ -15,7 +15,7 @@ These are release criteria. Features tested locally are not a claim of a live de
 Use the detailed steps in [README.md](../README.md). These account-level steps have not been performed by the agent:
 
 1. Create/select a Firebase **Spark** project, enable Google sign-in only, and create Firestore in production mode.
-2. Deploy the current `firestore.rules`, including the optional `reflection.notes` field. **An existing deployment must update its rules before deploying this app update.** Old entries and old v2 JSON backups remain readable; missing notes default to an empty string. Old rules will reject new saves without deleting the local draft.
+2. Deploy the current `firestore.rules`, including optional `reflection.notes` and `bootcampLesson` fields. **An existing deployment must update its rules before deploying this app update.** Old entries and old v2 JSON backups remain readable; missing notes default to an empty string, and the lesson stays absent until entered. Old rules will reject new lesson saves without deleting the local pending draft.
 3. Add the four **public** Firebase web-config values from `.env.example` locally and in the existing Cloudflare Worker build settings.
 4. Deploy the app and backend to the existing **Cloudflare Worker on Free**, keep its hostname authorized in Firebase Auth, and verify production CSP, sign-in, saving, and cross-device restoration.
 5. Record a real Day 1 entry; confirm “Saved to cloud”; verify another browser and a phone; export JSON and verify its contents. Keep the export somewhere private outside the browser.
@@ -25,6 +25,7 @@ Gemini automation is a separate, incomplete milestone. See [implementation and a
 ## Regression checks
 
 - `npm test`: old backups, notes-only days, durable drafts, edits during save, read-only store writes, conflicts, and missing-cloud recovery.
+- `npm run test:bootcamp`: separate lesson and speaking topic, derived week/day labels, per-day prompt context, clipboard fallback, reload persistence, complete backups, notebook search, mobile/accessibility checks, and read-only public display. Unit tests also cover both analysis transports and rejection of invalid lesson context before consuming AI quota.
 - `npm run test:progress`: combines saved AI feedback and personal reflections, compares criterion ratings across days, links highlights to source sessions, updates after edits and reloads, and checks desktop/mobile accessibility. The summary adds no AI calls, storage writes, or schema migration.
 - `npm run test:sharing`: full public journal viewing with the database switch on, no data with it off, owner toggle persistence, updates after confirmed saves, notes/review history/progress, accessibility, and no anonymous journal writes or Firebase session initialization. Unit tests use signed owner/non-owner tokens and an in-memory database to verify authorization, payload limits, flag revocation, preservation of quota counters, and protection against late updates re-enabling access. Live owner sign-in and the existing D1 binding still need verification after deployment.
 - `npm run test:safety`: two tabs sharing browser storage, import blocked in a read-only tab, safe editor handoff, reload persistence, one shared note between Notebook and Reflection, search, backup coverage, and mobile layout.

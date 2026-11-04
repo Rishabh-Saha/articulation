@@ -59,6 +59,20 @@ describe('rubric and averages', () => {
   })
 })
 describe('backups and prototype migration', () => {
+  it('preserves bootcamp-only days through backups without adding fields to old entries', () => {
+    const entry = blankDay(8)
+    expect(entry).not.toHaveProperty('bootcampLesson')
+    expect(
+      parseBackup(createExport({ 8: { ...entry, topic: 'Existing day' } })).entries[0],
+    ).not.toHaveProperty('bootcampLesson')
+    entry.bootcampLesson = 'Fixing filler words\nReplace “um” with a pause.'
+    expect(hasContent(entry)).toBe(true)
+    expect(parseBackup(JSON.parse(JSON.stringify(createExport({ 8: entry })))).entries).toEqual([
+      entry,
+    ])
+    expect(scores(entry).combined).toBeNull()
+    expect(daySchema.safeParse({ ...entry, bootcampLesson: 'a'.repeat(2001) }).success).toBe(false)
+  })
   it('keeps notes-only days and accepts old v2 backups without the new notes field', () => {
     const entry = blankDay(8)
     entry.reflection.notes = 'A thought worth keeping'
@@ -131,6 +145,22 @@ describe('backups and prototype migration', () => {
   })
 })
 describe('structured AI reviews', () => {
+  it('focuses coaching on the saved lesson while preserving the full rubric, output and score scale', () => {
+    const lesson = 'Week 2 Day 1: fix filler words.\nReplace “um” with a short pause.'
+    const prompt = aiPrompt(lesson)
+    expect(prompt).toContain(JSON.stringify(lesson))
+    expect(prompt).toContain('Still assess ALL 12 criteria using the same 1–5 scale')
+    expect(prompt).toContain('Do not assume improvement or invent progress')
+    const review = parseAiReview(prompt.split('JSON structure:\n')[1])
+    expect(Object.keys(review.audioScores)).toHaveLength(7)
+    expect(Object.keys(review.visualScores)).toHaveLength(5)
+    expect(
+      [...Object.values(review.audioScores), ...Object.values(review.visualScores)].every(
+        (rating) => rating.score === null,
+      ),
+    ).toBe(true)
+    expect(aiPrompt()).not.toContain('Bootcamp lesson (learner-provided context')
+  })
   function template() {
     return JSON.parse(aiPrompt().split('JSON structure:\n')[1])
   }

@@ -14,7 +14,7 @@ assert.ok(
 )
 const [hostname, port] = host.split(':')
 const env = await initializeTestEnvironment({
-  projectId: 'demo-articulation',
+  projectId: `demo-art-rules-${crypto.randomUUID().slice(0, 8)}`,
   firestore: {
     host: hostname,
     port: Number(port),
@@ -59,7 +59,6 @@ async function check(name, fn) {
   console.log(`PASS ${name}`)
 }
 try {
-  await env.clearFirestore()
   const alice = env
     .authenticatedContext('alice', { firebase: { sign_in_provider: 'google.com' } })
     .firestore()
@@ -126,6 +125,25 @@ try {
   await check('the owner cannot accidentally delete a day', () =>
     assertFails(deleteDoc(doc(alice, 'users/alice/days/1'))),
   )
+  await check(
+    'optional bootcamp lesson is accepted without making it mandatory for old entries',
+    async () => {
+      const e = entry()
+      e.bootcampLesson = 'Fixing filler words: pause instead of um'
+      await assertSucceeds(setDoc(doc(alice, 'users/alice/days/1'), payload(e, 4)))
+      assert.equal(
+        (await getDoc(doc(alice, 'users/alice/days/1'))).data().entry.bootcampLesson,
+        e.bootcampLesson,
+      )
+      await assertSucceeds(setDoc(doc(alice, 'users/alice/days/1'), payload(entry(), 5)))
+    },
+  )
+  await check('oversized or non-text bootcamp lessons are rejected', async () => {
+    for (const bootcampLesson of ['x'.repeat(2001), 123])
+      await assertFails(
+        setDoc(doc(alice, 'users/alice/days/1'), payload({ ...entry(), bootcampLesson }, 6)),
+      )
+  })
   console.log(`${count} Firestore rules checks passed.`)
 } finally {
   await env.cleanup()
