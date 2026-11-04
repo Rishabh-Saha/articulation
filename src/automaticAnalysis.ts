@@ -1,4 +1,4 @@
-import { parseAiReview } from './model'
+import { parseAiReview, bootcampLessonSchema } from './model'
 import type { AiReview } from './model'
 
 export const MAX_VIDEO_BYTES = 20 * 1024 * 1024
@@ -40,12 +40,15 @@ export async function analyzeVideo({
   token,
   signal,
   onPhase,
+  bootcampLesson = '',
 }: {
   file: File
   token: string
   signal: AbortSignal
   onPhase: (phase: AnalysisPhase) => void
+  bootcampLesson?: string
 }): Promise<AiReview> {
+  const lesson = bootcampLessonSchema.parse(bootcampLesson)
   await validateVideo(file)
   signal.throwIfAborted()
   return new Promise((resolve, reject) => {
@@ -57,6 +60,7 @@ export async function analyzeVideo({
     xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.setRequestHeader('Content-Type', 'video/mp4')
     xhr.setRequestHeader('X-Video-Consent', 'yes')
+    if (lesson.trim()) xhr.setRequestHeader('X-Bootcamp-Lesson', encodeURIComponent(lesson))
     xhr.setRequestHeader('X-Video-Size', String(file.size))
     xhr.setRequestHeader('X-Video-Name', encodeURIComponent(file.name))
     xhr.upload.onload = () => onPhase('analyzing')
@@ -133,12 +137,15 @@ export async function analyzePhotosVideo({
   token,
   signal,
   onPhase,
+  bootcampLesson = '',
 }: {
   photosUrl: string
   token: string
   signal: AbortSignal
   onPhase: (phase: AnalysisPhase) => void
+  bootcampLesson?: string
 }): Promise<AiReview> {
+  const lesson = bootcampLessonSchema.parse(bootcampLesson)
   if (!isPhotosLink(photosUrl))
     throw Error('Add a Google Photos share link to this day’s video first.')
   signal.throwIfAborted()
@@ -149,6 +156,7 @@ export async function analyzePhotosVideo({
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       'X-Video-Consent': 'yes',
+      ...(lesson.trim() ? { 'X-Bootcamp-Lesson': encodeURIComponent(lesson) } : {}),
     },
     body: JSON.stringify({ photosUrl }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(420000)]),

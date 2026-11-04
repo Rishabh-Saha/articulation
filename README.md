@@ -20,6 +20,7 @@ The app works without Firebase in **device-only mode**. No sample scores or base
 
 - Six weeks / 42 daily cards, explicit completion, next incomplete day, desktop and mobile layouts.
 - The exact seven audio and five visual criteria; independent evidence notes, unscored gaze and movement observations, reflections, and timestamped outside feedback.
+- Each daily session has an optional **Bootcamp lesson**, with its week/day shown (for example, Day 8 is Week 2 · Day 1). Keep the lesson separate from the speaking topic. **Copy rubric prompt** and in-app AI analysis include that day's lesson as coaching context while keeping all 12 criteria, the same score scale, and evidence from the actual video. Lessons travel with cloud saves, backups, notebook search, and the full published journal. Old entries stay valid without the field; no sample lessons are inserted. **Deploy the updated `firestore.rules` before using cloud lesson saves.**
 - A searchable **Notebook** for all 42 days, with free-form notes and reflections shared with the session view. Old entries and backups default the new notes field to an empty string.
 - HTTPS Google Photos or other external video links, opened in a new tab. With explicit AI consent, the backend can attempt to retrieve an individual shared Photos video for review; other links are viewing references only.
 - Self / AI audio, visual, and combined trends. Unrated days are gaps, not zeroes; combined averages give each assessed criterion equal weight.
@@ -72,6 +73,10 @@ Use the **AI review** tab to copy the exact rubric prompt. In Google AI Studio, 
 
 The importer requires all 12 criteria, nullable integer 1–5 scores, evidence, suggestions, model, prompt version, filename, analysis date, strengths, improvements, exercise, and limitations. Unknown modalities remain **Not assessed**. User confirmation that the actual video was supplied is required. Averages are recomputed; model-supplied averages are ignored. Each import adds a version; it never replaces self-ratings or old AI reviews. Model filler counts and timestamps are estimates, not verified facts. Filler confidence is optional; omitted values display “confidence not provided.” Pasted line breaks inside JSON strings are preserved, and validation errors identify the affected fields.
 
+Add up to 2,000 characters in **Bootcamp lesson** before copying the prompt or analyzing a video. For example, “Fixing filler words: replace ‘um’ with a short pause.” The lesson focuses relevant evidence, suggestions and the next exercise; it is not evidence that the skill improved. Empty lessons use the standard prompt. Changing the lesson cancels any unsaved in-app analysis so an old result cannot be attached to a new focus. In-app consent includes sending this lesson with the video; other journal notes are not added to the request.
+
+The optional `bootcampLesson` field needs the matching owner-only rules in this repository. Existing documents do not gain the field merely by being opened or edited elsewhere. If the live project still has older rules, new lesson edits remain in the local pending draft and cloud saving reports an error until the rules are deployed. Use the existing Firebase project's Rules console, or an already authenticated Firebase CLI, to deploy only `firestore.rules`; no database reset, new credentials or paid service is required.
+
 Before activating automatic analysis, separately verify current official pricing/model availability and prove a streaming/resumable upload path with real media. The backend must verify Firebase JWT signatures and claims, restrict to a single allowed UID, enforce MIME/size/rate/daily caps, restrict CORS to the deployed origin, retain no permanent video, and keep the API key in a Worker secret. Do not expose a key or use an insecure stub to bypass those prerequisites.
 
 ## Public view-only journal
@@ -119,6 +124,7 @@ npm run test:e2e
 npm run test:manual-review
 npm run test:progress
 npm run test:sharing
+npm run test:bootcamp
 npm run test:a11y
 npm run test:safety
 ```

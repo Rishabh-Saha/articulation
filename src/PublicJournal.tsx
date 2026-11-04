@@ -61,6 +61,7 @@ export function PublicDay({
           The video host controls playback access and may require its own login.
         </p>
       )}
+      <Text label="Bootcamp lesson" value={entry.bootcampLesson ?? ''} />
       <details className="public-section">
         <summary>Self review · {formatScore(scores(entry).combined)} / 5</summary>
         {audioCriteria.map((c) => (
@@ -214,6 +215,7 @@ export function PublicJournalContent({ snapshot }: { snapshot: PublicSnapshot })
                 Day {entry.day} · {entry.topic || 'Daily practice'}
               </a>
             </h2>
+            <Text label="Bootcamp lesson" value={entry.bootcampLesson ?? ''} />
             <Text label="Notes" value={entry.reflection.notes} />
             <Text label="What went well" value={entry.reflection.strengths} />
             <Text label="What to change" value={entry.reflection.improvements} />

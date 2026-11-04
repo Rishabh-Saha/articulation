@@ -11,6 +11,7 @@ import {
   Plus,
   Shield,
   FileJson,
+  BookOpen,
 } from 'lucide-react'
 import { audioCriteria, visualCriteria, scale } from './rubric'
 import type { AudioKey, VisualKey, Criterion } from './rubric'
@@ -224,10 +225,14 @@ export function AiReviews({
   const aiScore = review ? scores({ ...entry, aiReviews: [review] }, true) : null
   async function copyPrompt() {
     try {
-      await navigator.clipboard.writeText(aiPrompt())
-      notify('Rubric prompt copied. Attach your actual video in AI Studio.')
+      await navigator.clipboard.writeText(aiPrompt(entry.bootcampLesson))
+      notify(
+        entry.bootcampLesson?.trim()
+          ? 'Rubric prompt copied with this day’s bootcamp lesson. Attach your actual video in AI Studio.'
+          : 'Rubric prompt copied. Attach your actual video in AI Studio.',
+      )
     } catch {
-      setRaw(aiPrompt())
+      setRaw(aiPrompt(entry.bootcampLesson))
       setImporting(true)
       setError(
         'Clipboard unavailable. Select and copy the prompt below, then replace it with your AI result.',
@@ -267,6 +272,15 @@ export function AiReviews({
             <span>3</span>Paste the JSON response here. We validate it before saving.
           </li>
         </ol>
+        {entry.bootcampLesson?.trim() && (
+          <div className="notice">
+            <BookOpen size={18} />
+            <span>
+              <strong>This day’s bootcamp lesson is included</strong>
+              <span className="preserve-whitespace">{entry.bootcampLesson}</span>
+            </span>
+          </div>
+        )}
         <div className="button-row">
           <button className="button" onClick={() => void copyPrompt()}>
             <Clipboard size={15} />

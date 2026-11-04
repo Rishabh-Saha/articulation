@@ -1102,6 +1102,9 @@ select:focus {
   margin: 0 auto;
   padding: 28px 24px 60px;
 }
+.bootcamp-panel .panel-heading {
+  flex-wrap: wrap;
+}
 .public-header,
 .public-tabs {
   display: flex;

@@ -18,6 +18,7 @@
     "test:manual-review": "node tests/manual-review.mjs",
     "test:progress": "node tests/progress-smoke.mjs",
     "test:sharing": "node tests/sharing-smoke.mjs",
+    "test:bootcamp": "node tests/bootcamp-smoke.mjs",
     "test:cloud": "node tests/cloud-smoke.mjs",
     "test:a11y": "node tests/accessibility.mjs",
     "test:safety": "node tests/safety-smoke.mjs",

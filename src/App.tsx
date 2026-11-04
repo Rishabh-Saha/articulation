@@ -33,6 +33,7 @@ import { useJournal, JournalStore, storageKey } from './journal'
 import { firebaseConfigured, login, logout } from './firebase'
 import {
   blankDay,
+  BOOTCAMP_LESSON_MAX_LENGTH,
   createExport,
   formatScore,
   hasContent,
@@ -677,7 +678,7 @@ function App() {
                               <button
                                 key={day}
                                 className={`day-card ${done ? 'done' : started ? 'started' : ''} ${day === nextDay ? 'next' : ''}`}
-                                aria-label={`Day ${day}, ${done ? 'completed' : started ? 'in progress' : 'not started'}${entry?.topic ? `, ${entry.topic}` : ''}`}
+                                aria-label={`Day ${day}, ${done ? 'completed' : started ? 'in progress' : 'not started'}${entry?.topic || entry?.bootcampLesson ? `, ${entry.topic || entry.bootcampLesson}` : ''}`}
                                 onClick={() => navigate({ view: 'day', day })}
                               >
                                 <div className="day-card-top">
@@ -695,6 +696,7 @@ function App() {
                                 </div>
                                 <strong>
                                   {entry?.topic ||
+                                    entry?.bootcampLesson ||
                                     (day === nextDay ? 'Your next chapter' : 'An open canvas')}
                                 </strong>
                                 <div className="day-card-bottom">
@@ -1253,6 +1255,37 @@ function DayDetail({
               with a share link may be able to view it.
             </p>
           </div>
+        </div>
+        <div className="panel bootcamp-panel">
+          <div className="panel-heading">
+            <h3>Bootcamp lesson</h3>
+            <span className="badge">
+              Week {Math.ceil(entry.day / 7)} · Day {((entry.day - 1) % 7) + 1}
+            </span>
+          </div>
+          <label className="field">
+            What was today’s lesson about?
+            <textarea
+              rows={4}
+              aria-label="What was today’s lesson about?"
+              maxLength={BOOTCAMP_LESSON_MAX_LENGTH}
+              value={entry.bootcampLesson ?? ''}
+              placeholder="e.g. Fixing filler words: replace ‘um’ with a short pause and finish each thought before starting the next."
+              onChange={(event) => {
+                const value = event.target.value
+                update((current) => {
+                  const next = { ...current }
+                  if (value) next.bootcampLesson = value
+                  else delete next.bootcampLesson
+                  return next
+                })
+              }}
+            />
+          </label>
+          <p className="fine-print">
+            Optional. Included in Copy rubric prompt and in-app AI review to focus feedback on this
+            lesson.
+          </p>
         </div>
         <div className="panel session-summary">
           <div className="panel-heading">

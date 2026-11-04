@@ -25,7 +25,13 @@ export default function Notebook({
     const entry = records[day]
     return (
       !query.trim() ||
-      [`day ${day}`, entry?.topic, entry?.date, ...Object.values(entry?.reflection ?? {})]
+      [
+        `day ${day}`,
+        entry?.topic,
+        entry?.date,
+        entry?.bootcampLesson,
+        ...Object.values(entry?.reflection ?? {}),
+      ]
         .join(' ')
         .toLowerCase()
         .includes(query.trim().toLowerCase())

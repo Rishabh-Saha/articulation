@@ -126,6 +126,35 @@ beforeAll(async () => {
 })
 afterEach(() => vi.unstubAllGlobals())
 describe('authenticated free-only video endpoint', () => {
+  it('includes the lesson in provider coaching without changing the 12-criterion rubric', async () => {
+    const fetch = providerMock()
+    vi.stubGlobal('fetch', fetch)
+    const lesson =
+      'Fixing filler words — replace “um” with a pause.\nOne complete thought at a time.'
+    const response = await analyze(
+      await request({ 'X-Bootcamp-Lesson': encodeURIComponent(lesson) }),
+      environment(),
+      () => {},
+    )
+    expect(response.status).toBe(200)
+    const call = fetch.mock.calls.find(([url]) => String(url).includes(':generateContent'))!
+    const prompt = JSON.parse(call[1]!.body as string).contents[0].parts[0].text
+    expect(prompt).toContain(JSON.stringify(lesson))
+    expect(prompt).toContain('Still assess ALL 12 criteria')
+    expect(prompt).toContain('Do not assume improvement')
+  })
+  it.each(['%not-valid', encodeURIComponent('x'.repeat(2001))])(
+    'rejects invalid lesson context before consuming free quota',
+    async (value) => {
+      vi.stubGlobal('fetch', providerMock())
+      const env = environment()
+      const quota = vi.spyOn(env.AI_LIMITS, 'prepare')
+      const response = await analyze(await request({ 'X-Bootcamp-Lesson': value }), env, () => {})
+      expect(response.status).toBe(400)
+      expect((await response.json()).error).toContain('bootcamp lesson')
+      expect(quota).not.toHaveBeenCalled()
+    },
+  )
   it('fails closed when not explicitly configured without making provider calls', async () => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)
